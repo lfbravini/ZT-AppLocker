@@ -122,8 +122,39 @@ namespace ZTAppLocker
                         TunnelServiceName, escapedBinPath), 10000);
                 }
 
+                // Ensure no external zerotier-one_x64.exe (e.g., from C:\ProgramData\ZeroTier\One) is holding port 9993
+                bool externalZtRunning = false;
+                foreach (Process p in Process.GetProcessesByName("zerotier-one_x64"))
+                {
+                    try
+                    {
+                        if (!string.Equals(p.MainModule.FileName, DaemonExePath, StringComparison.OrdinalIgnoreCase))
+                        {
+                            externalZtRunning = true;
+                            break;
+                        }
+                    }
+                    catch { externalZtRunning = true; }
+                }
+
                 using (ServiceController sc = new ServiceController(TunnelServiceName))
                 {
+                    if (externalZtRunning && sc.Status != ServiceControllerStatus.Stopped)
+                    {
+                        sc.Stop();
+                        sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(12));
+                    }
+
+                    foreach (Process p in Process.GetProcessesByName("zerotier-one_x64"))
+                    {
+                        try
+                        {
+                            if (!string.Equals(p.MainModule.FileName, DaemonExePath, StringComparison.OrdinalIgnoreCase))
+                                p.Kill();
+                        }
+                        catch { }
+                    }
+
                     if (sc.Status != ServiceControllerStatus.Running)
                     {
                         sc.Start();
@@ -290,5 +321,6 @@ namespace ZTAppLocker
         }
     }
 }
+
 
 
