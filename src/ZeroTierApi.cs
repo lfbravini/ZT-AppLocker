@@ -175,8 +175,25 @@ namespace ZTAppLocker
 
         public static List<ZtNetworkInfo> GetNetworks()
         {
-            try { return SendJson<List<ZtNetworkInfo>>("GET", "/network") ?? new List<ZtNetworkInfo>(); }
-            catch { return new List<ZtNetworkInfo>(); }
+            // DataContractJsonSerializer does not reliably deserialize a root JSON array into List<T>.
+            // Prefer array typing over raw stream List<T>.
+            try
+            {
+                string raw = SendJsonRaw("GET", "/network", null);
+                if (string.IsNullOrWhiteSpace(raw))
+                    return new List<ZtNetworkInfo>();
+
+                using (var ms = new MemoryStream(Encoding.UTF8.GetBytes(raw)))
+                {
+                    var ser = new DataContractJsonSerializer(typeof(ZtNetworkInfo[]));
+                    var arr = ser.ReadObject(ms) as ZtNetworkInfo[];
+                    return arr != null ? arr.ToList() : new List<ZtNetworkInfo>();
+                }
+            }
+            catch
+            {
+                return new List<ZtNetworkInfo>();
+            }
         }
 
         public static void EnsurePeerTransportBypassRoutes(bool enable)

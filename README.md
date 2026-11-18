@@ -31,6 +31,10 @@ Local-only build payloads (gitignored):
 .\dist\ZT-AppLocker.exe --install    # install ZTAppLockerGuard and shortcuts
 .\dist\ZT-AppLocker.exe --uninstall  # remove service and clean install dir
 .\dist\ZT-AppLocker.exe --service    # service entrypoint (SCM only)
+.\dist\ZT-AppLocker.exe --status [--out <file>]
+.\dist\ZT-AppLocker.exe --lock <exe> --network <16hex> [--boot-guard]
+.\dist\ZT-AppLocker.exe --unlock <exe>
+.\dist\ZT-AppLocker.exe --unlock-all
 ```
 
 | Item | Location |
@@ -39,6 +43,18 @@ Local-only build payloads (gitignored):
 | Guard service | `ZTAppLockerGuard` (LocalSystem) |
 | Policy | `%ProgramData%\ZT-AppLocker\policy.json` |
 | Guard log | `C:\Program Files\ZT-AppLocker\ZTAppLockerGuard.log` |
+
+## Smoke test
+
+Run elevated from the repo root:
+
+```powershell
+.\Test-SmokeZTAppLocker.ps1
+# Optional full lock path (network must already be joined):
+.\Test-SmokeZTAppLocker.ps1 -ExePath C:\Windows\System32\curl.exe -NetworkId <16hex> -ApplyLock -UnlockAfter
+```
+
+Default mode is non-destructive (service/log/policy/`--status`). After `--lock`, wait for `ZTAppLockerGuard` reconcile (~15s) before judging SplitTunnel log lines — the engine runs in the service process, not the CLI process.
 
 ## Architecture
 
