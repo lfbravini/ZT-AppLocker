@@ -679,117 +679,140 @@ namespace ZTAppLocker
                 leakCount == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
         }
 
+        private int _refreshInFlight = 0;
+
         private void RefreshAll(bool force)
         {
-            ZtTelemetrySummary telem = ZeroTierApi.GetTelemetrySummary();
-            List<ZtNetworkInfo> networks = ZeroTierApi.GetNetworks();
-            string svcStatus = ServiceManager.GetServiceStatus();
-            AppLockerPolicy pol = PolicyStore.Load();
-
-            // Update System Tray
-            try
-            {
-                ZtNetworkInfo primaryNet = networks.FirstOrDefault(n => n.Status == "OK") ?? networks.FirstOrDefault();
-                string trayHover = telem.DaemonOnline && primaryNet != null
-                    ? string.Format("ZT: {0} | {1} | Locks: {2}", primaryNet.PrimaryIpv4, telem.PeerSummary, pol.LockedApps.Count)
-                    : string.Format("ZT: OFFLINE | WFP Locks: {0} (Fail-Closed)", pol.LockedApps.Count);
-                if (trayHover.Length > 63) trayHover = trayHover.Substring(0, 63);
-                _trayIcon.Text = trayHover;
-
-                _trayNodeHeader.Text = string.Format("Node {0}: {1}", telem.NodeId, telem.PeerSummary);
-                _trayNetDetail.Text = primaryNet != null
-                    ? string.Format("Net {0}: {1}  |  Locked Apps: {2}", primaryNet.Id, primaryNet.PrimaryIpv4, pol.LockedApps.Count)
-                    : string.Format("No Active Network  |  Locked Apps: {0}", pol.LockedApps.Count);
-            }
-            catch { }
-
-            string sig = string.Join("|", new[]
-            {
-                telem.NodeId,
-                telem.DaemonOnline.ToString(),
-                telem.PeerSummary,
-                svcStatus,
-                pol.StrictDnsLock.ToString(),
-                string.Join(";", networks.Select(n => n.Id + ":" + n.Status + ":" + n.PrimaryIpv4 + ":" + n.AllowDefault + ":" + n.AllowDNS)),
-                string.Join(";", pol.LockedApps.Select(a => a.ExePath + ":" + a.NetworkId + ":" + a.BootTimeGuard))
-            });
-
-            if (!force && sig == _lastStateHash)
+            if (System.Threading.Interlocked.CompareExchange(ref _refreshInFlight, 1, 0) != 0)
                 return;
-            _lastStateHash = sig;
 
-            // Update Top Status Panel
-            if (!telem.DaemonOnline)
+            new System.Threading.Thread(() =>
             {
-                pnlTopStatus.BackColor = Color.FromArgb(253, 231, 233);
-                lblNodeStatus.ForeColor = Color.DarkRed;
-                lblNodeStatus.Text = "ZEROTIER CORE OFFLINE (All Locked Apps Fail-Closed)";
-                lblDaemonDetail.Text = "Click Init ZT Core to unpack embedded ZeroTier + TAP driver.";
-                btnStartZtDaemon.Visible = true;
-                btnInstallSvc.Location = new Point(402, 12);
-                btnInstallSvc.Size = new Size(100, 30);
-                btnUninstallSvc.Visible = true;
-            }
-            else
-            {
-                pnlTopStatus.BackColor = Color.FromArgb(223, 246, 221);
-                lblNodeStatus.ForeColor = Color.DarkGreen;
-                lblNodeStatus.Text = string.Format("NODE {0} ONLINE  [{1}]", telem.NodeId, telem.PeerSummary);
-                lblDaemonDetail.Text = string.Format("ZT Core v{0}  |  Guard Service: {1}  |  WFP Sublayer Active", telem.Version, svcStatus);
-                btnStartZtDaemon.Visible = false;
-                btnInstallSvc.Location = new Point(402, 12);
-                btnInstallSvc.Size = new Size(100, 30);
-                btnUninstallSvc.Visible = true;
-            }
-
-            btnInstallSvc.Text = svcStatus == "NotInstalled" ? "Install Guard" : "Repair Guard";
-            btnUninstallSvc.Enabled = (svcStatus != "NotInstalled");
-
-            // Sync Hardening Checkboxes
-            _suppressUiEvents = true;
-            chkStrictDnsLock.Checked = pol.StrictDnsLock;
-            _suppressUiEvents = false;
-
-            // Update Networks ComboBox
-            ZtNetworkInfo prevNet = cmbNetworks.SelectedItem as ZtNetworkInfo;
-            string prevNetId = prevNet != null ? prevNet.Id : null;
-
-            cmbNetworks.Items.Clear();
-            int selIdx = -1;
-            for (int i = 0; i < networks.Count; i++)
-            {
-                cmbNetworks.Items.Add(networks[i]);
-                if (prevNetId != null && string.Equals(networks[i].Id, prevNetId, StringComparison.OrdinalIgnoreCase))
-                    selIdx = i;
-            }
-            if (cmbNetworks.Items.Count > 0)
-                cmbNetworks.SelectedIndex = selIdx >= 0 ? selIdx : 0;
-            SyncNetworkCheckboxesFromSelection();
-
-            // Update Active Locks ListBox
-            lstActive.BeginUpdate();
-            lstActive.Items.Clear();
-            foreach (var entry in pol.LockedApps)
-            {
-                ZtNetworkInfo net = networks.FirstOrDefault(n => string.Equals(n.Id, entry.NetworkId, StringComparison.OrdinalIgnoreCase));
-                string label = net != null
-                    ? (string.IsNullOrWhiteSpace(net.Name) ? net.Id : string.Format("{0} ({1})", net.Name, net.PrimaryIpv4))
-                    : entry.NetworkId;
-
-                string tag = "[WFP-LOCKED]";
-                if (!File.Exists(entry.ExePath))
-                    tag = "[EXE MISSING]";
-                else if (net == null || net.Status != "OK")
-                    tag = "[TUNNEL OFFLINE - BLOCKING]";
-
-                lstActive.Items.Add(new ActiveLockDisplayItem
+                try
                 {
-                    Policy = entry,
-                    NetworkLabel = label,
-                    StatusTag = tag
-                });
-            }
-            lstActive.EndUpdate();
+                    ZtTelemetrySummary telem = ZeroTierApi.GetTelemetrySummary();
+                    List<ZtNetworkInfo> networks = telem.DaemonOnline ? ZeroTierApi.GetNetworks() : new List<ZtNetworkInfo>();
+                    string svcStatus = ServiceManager.GetServiceStatus();
+                    AppLockerPolicy pol = PolicyStore.Load();
+
+                    if (IsDisposed || !IsHandleCreated) return;
+
+                    BeginInvoke((Action)(() =>
+                    {
+                        try
+                        {
+                            try
+                            {
+                                ZtNetworkInfo primaryNet = networks.FirstOrDefault(n => n.Status == "OK") ?? networks.FirstOrDefault();
+                                string trayHover = telem.DaemonOnline && primaryNet != null
+                                    ? string.Format("ZT: {0} | {1} | Locks: {2}", primaryNet.PrimaryIpv4, telem.PeerSummary, pol.LockedApps.Count)
+                                    : string.Format("ZT: OFFLINE | WFP Locks: {0} (Fail-Closed)", pol.LockedApps.Count);
+                                if (trayHover.Length > 63) trayHover = trayHover.Substring(0, 63);
+                                _trayIcon.Text = trayHover;
+
+                                _trayNodeHeader.Text = string.Format("Node {0}: {1}", telem.NodeId, telem.PeerSummary);
+                                _trayNetDetail.Text = primaryNet != null
+                                    ? string.Format("Net {0}: {1}  |  Locked Apps: {2}", primaryNet.Id, primaryNet.PrimaryIpv4, pol.LockedApps.Count)
+                                    : string.Format("No Active Network  |  Locked Apps: {0}", pol.LockedApps.Count);
+                            }
+                            catch { }
+
+                            string sig = string.Join("|", new[]
+                            {
+                                telem.NodeId,
+                                telem.DaemonOnline.ToString(),
+                                telem.PeerSummary,
+                                svcStatus,
+                                pol.StrictDnsLock.ToString(),
+                                string.Join(";", networks.Select(n => n.Id + ":" + n.Status + ":" + n.PrimaryIpv4 + ":" + n.AllowDefault + ":" + n.AllowDNS)),
+                                string.Join(";", pol.LockedApps.Select(a => a.ExePath + ":" + a.NetworkId + ":" + a.BootTimeGuard))
+                            });
+
+                            if (!force && sig == _lastStateHash)
+                                return;
+                            _lastStateHash = sig;
+
+                            if (!telem.DaemonOnline)
+                            {
+                                pnlTopStatus.BackColor = Color.FromArgb(253, 231, 233);
+                                lblNodeStatus.ForeColor = Color.DarkRed;
+                                lblNodeStatus.Text = "ZEROTIER CORE OFFLINE (All Locked Apps Fail-Closed)";
+                                lblDaemonDetail.Text = "Click Init ZT Core to unpack embedded ZeroTier + TAP driver.";
+                                btnStartZtDaemon.Visible = true;
+                                btnInstallSvc.Location = new Point(402, 12);
+                                btnInstallSvc.Size = new Size(100, 30);
+                                btnUninstallSvc.Visible = true;
+                            }
+                            else
+                            {
+                                pnlTopStatus.BackColor = Color.FromArgb(223, 246, 221);
+                                lblNodeStatus.ForeColor = Color.DarkGreen;
+                                lblNodeStatus.Text = string.Format("NODE {0} ONLINE  [{1}]", telem.NodeId, telem.PeerSummary);
+                                lblDaemonDetail.Text = string.Format("ZT Core v{0} (Port {1})  |  Guard: {2}  |  WFP Active",
+                                    telem.Version, EmbeddedZtManager.ControlPort, svcStatus);
+                                btnStartZtDaemon.Visible = false;
+                                btnInstallSvc.Location = new Point(402, 12);
+                                btnInstallSvc.Size = new Size(100, 30);
+                                btnUninstallSvc.Visible = true;
+                            }
+
+                            btnInstallSvc.Text = svcStatus == "NotInstalled" ? "Install Guard" : "Repair Guard";
+                            btnUninstallSvc.Enabled = (svcStatus != "NotInstalled");
+
+                            _suppressUiEvents = true;
+                            chkStrictDnsLock.Checked = pol.StrictDnsLock;
+                            _suppressUiEvents = false;
+
+                            ZtNetworkInfo prevNet = cmbNetworks.SelectedItem as ZtNetworkInfo;
+                            string prevNetId = prevNet != null ? prevNet.Id : null;
+
+                            cmbNetworks.Items.Clear();
+                            int selIdx = -1;
+                            for (int i = 0; i < networks.Count; i++)
+                            {
+                                cmbNetworks.Items.Add(networks[i]);
+                                if (prevNetId != null && string.Equals(networks[i].Id, prevNetId, StringComparison.OrdinalIgnoreCase))
+                                    selIdx = i;
+                            }
+                            if (cmbNetworks.Items.Count > 0)
+                                cmbNetworks.SelectedIndex = selIdx >= 0 ? selIdx : 0;
+                            SyncNetworkCheckboxesFromSelection();
+
+                            lstActive.BeginUpdate();
+                            lstActive.Items.Clear();
+                            foreach (var entry in pol.LockedApps)
+                            {
+                                ZtNetworkInfo net = networks.FirstOrDefault(n => string.Equals(n.Id, entry.NetworkId, StringComparison.OrdinalIgnoreCase));
+                                string label = net != null
+                                    ? (string.IsNullOrWhiteSpace(net.Name) ? net.Id : string.Format("{0} ({1})", net.Name, net.PrimaryIpv4))
+                                    : entry.NetworkId;
+
+                                string tag = "[WFP-LOCKED]";
+                                if (!File.Exists(entry.ExePath))
+                                    tag = "[EXE MISSING]";
+                                else if (net == null || net.Status != "OK")
+                                    tag = "[TUNNEL OFFLINE - BLOCKING]";
+
+                                lstActive.Items.Add(new ActiveLockDisplayItem
+                                {
+                                    Policy = entry,
+                                    NetworkLabel = label,
+                                    StatusTag = tag
+                                });
+                            }
+                            lstActive.EndUpdate();
+                        }
+                        finally
+                        {
+                            System.Threading.Interlocked.Exchange(ref _refreshInFlight, 0);
+                        }
+                    }));
+                }
+                catch
+                {
+                    System.Threading.Interlocked.Exchange(ref _refreshInFlight, 0);
+                }
+            }) { IsBackground = true }.Start();
         }
 
         private void BrowseExe_Click(object sender, EventArgs e)
