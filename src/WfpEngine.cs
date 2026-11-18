@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -29,6 +32,7 @@ namespace ZTAppLocker
 
         private static readonly Guid FWPM_CONDITION_ALE_APP_ID = new Guid("d78e1e87-8644-4ea5-9437-d809ecefc971");
         private static readonly Guid FWPM_CONDITION_IP_LOCAL_INTERFACE = new Guid("4cd62a49-59c3-4969-b7f3-da5d32890a48");
+        private static readonly Guid FWPM_CONDITION_IP_LOCAL_ADDRESS = new Guid("d9ee00de-c1ef-4617-bfe3-ffd8f5a08957");
         private static readonly Guid FWPM_CONDITION_IP_REMOTE_PORT = new Guid("c35a604d-d22b-4e1a-91b4-68f674ee674b");
         private static readonly Guid FWPM_CONDITION_IP_PROTOCOL = new Guid("3971ef2b-623e-4f9a-8cb1-6e79b806b9a7");
         private static readonly Guid FWPM_CONDITION_FLAGS = new Guid("632ce23b-5167-435c-86d7-e903684aa80c");
@@ -50,6 +54,7 @@ namespace ZTAppLocker
         private const uint FWP_UINT16 = 2;
         private const uint FWP_UINT32 = 3;
         private const uint FWP_UINT64 = 4;
+        private const uint FWP_BYTE_ARRAY16_TYPE = 11;
         private const uint FWP_BYTE_BLOB_TYPE = 12;
 
         private const uint FWP_CONDITION_FLAG_IS_LOOPBACK = 0x00000001;
@@ -468,6 +473,25 @@ namespace ZTAppLocker
                 conds);
         }
 
+        private static List<IPAddress> GetAdapterLocalAddresses(string adapterGuidString, AddressFamily family)
+        {
+            var result = new List<IPAddress>();
+            Guid targetGuid = new Guid(adapterGuidString);
+            foreach (NetworkInterface nic in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                Guid nicGuid;
+                if (Guid.TryParse(nic.Id, out nicGuid) && nicGuid == targetGuid)
+                {
+                    foreach (UnicastIPAddressInformation uni in nic.GetIPProperties().UnicastAddresses)
+                    {
+                        if (uni.Address.AddressFamily == family)
+                            result.Add(uni.Address);
+                    }
+                }
+            }
+            return result;
+        }
+
         private static void AddAppFilterSet(
             IntPtr engine,
             Guid layer,
@@ -479,63 +503,126 @@ namespace ZTAppLocker
             ulong ztLuid,
             uint flags)
         {
-            IntPtr luidPtr = Marshal.AllocHGlobal(sizeof(ulong));
-            try
+            // Clean up any legacy ALLOW_V4/V6 single filter key and indexed allow keys
+            Guid legacyAllow = DeriveDeterministicGuid(appHash + ":ALLOW_" + tag);
+            FwpmFilterDeleteByKey0(engine, ref legacyAllow);
+            for (int idx = 0; idx < 8; idx++)
             {
-                Marshal.WriteInt64(luidPtr, unchecked((long)ztLuid));
-
-                AddSingleFilter(engine,
-                    DeriveDeterministicGuid(appHash + ":LOOP_" + tag),
-                    layer,
-                    string.Format("ZT-AppLocker [{0}] Permit Loopback {1}", leaf, tag),
-                    exePath,
-                    flags,
-                    15,
-                    FWP_ACTION_PERMIT,
-                    new[]
-                    {
-                        MakeAppIdCondition(appIdBlobPtr),
-                        new FWPM_FILTER_CONDITION0
-                        {
-                            fieldKey = FWPM_CONDITION_FLAGS,
-                            matchType = FWP_MATCH_FLAGS_ALL_SET,
-                            conditionValue = new FWP_VALUE0 { type = FWP_UINT32, value = FWP_CONDITION_FLAG_IS_LOOPBACK }
-                        }
-                    });
-
-                AddSingleFilter(engine,
-                    DeriveDeterministicGuid(appHash + ":ALLOW_" + tag),
-                    layer,
-                    string.Format("ZT-AppLocker [{0}] Permit ZeroTier {1}", leaf, tag),
-                    exePath,
-                    flags,
-                    10,
-                    FWP_ACTION_PERMIT,
-                    new[]
-                    {
-                        MakeAppIdCondition(appIdBlobPtr),
-                        new FWPM_FILTER_CONDITION0
-                        {
-                            fieldKey = FWPM_CONDITION_IP_LOCAL_INTERFACE,
-                            matchType = FWP_MATCH_EQUAL,
-                            conditionValue = new FWP_VALUE0 { type = FWP_UINT64, value = unchecked((ulong)luidPtr.ToInt64()) }
-                        }
-                    });
-
-                AddSingleFilter(engine,
-                    DeriveDeterministicGuid(appHash + ":BLOCK_" + tag),
-                    layer,
-                    string.Format("ZT-AppLocker [{0}] Catch-All Block {1}", leaf, tag),
-                    exePath,
-                    flags,
-                    1,
-                    FWP_ACTION_BLOCK,
-                    new[] { MakeAppIdCondition(appIdBlobPtr) });
+                Guid idxAllow = DeriveDeterministicGuid(string.Format("{0}:ALLOW_{1}_{2}", appHash, tag, idx));
+                FwpmFilterDeleteByKey0(engine, ref idxAllow);
             }
-            finally
+
+            // 1. Permit Loopback (localhost IPC)
+            AddSingleFilter(engine,
+                DeriveDeterministicGuid(appHash + ":LOOP_" + tag),
+                layer,
+                string.Format("ZT-AppLocker [{0}] Permit Loopback {1}", leaf, tag),
+                exePath,
+                flags,
+                15,
+                FWP_ACTION_PERMIT,
+                new[]
+                {
+                    MakeAppIdCondition(appIdBlobPtr),
+                    new FWPM_FILTER_CONDITION0
+                    {
+                        fieldKey = FWPM_CONDITION_FLAGS,
+                        matchType = FWP_MATCH_FLAGS_ALL_SET,
+                        conditionValue = new FWP_VALUE0 { type = FWP_UINT32, value = FWP_CONDITION_FLAG_IS_LOOPBACK }
+                    }
+                });
+
+            // 2. Permit outbound traffic bound to the ZeroTier virtual adapter's assigned IP(s)
+            // Note: ALE_AUTH_CONNECT supports FWPM_CONDITION_IP_LOCAL_ADDRESS (whereas IP_LOCAL_INTERFACE is transport-layer only)
+            AddressFamily family = (tag == "V4") ? AddressFamily.InterNetwork : AddressFamily.InterNetworkV6;
+            string adapterGuid = ResolveAdapterGuidFromLuid(ztLuid);
+            List<IPAddress> ztAddrs = GetAdapterLocalAddresses(adapterGuid, family);
+
+            for (int i = 0; i < ztAddrs.Count; i++)
             {
-                Marshal.FreeHGlobal(luidPtr);
+                IPAddress ip = ztAddrs[i];
+                if (family == AddressFamily.InterNetwork)
+                {
+                    byte[] bytes = ip.GetAddressBytes();
+                    // WFP expects host-order UINT32 for IPv4 addresses
+                    uint hostOrderIp = ((uint)bytes[0] << 24) | ((uint)bytes[1] << 16) | ((uint)bytes[2] << 8) | bytes[3];
+
+                    AddSingleFilter(engine,
+                        DeriveDeterministicGuid(string.Format("{0}:ALLOW_{1}_{2}", appHash, tag, i)),
+                        layer,
+                        string.Format("ZT-AppLocker [{0}] Permit ZeroTier {1} ({2})", leaf, tag, ip),
+                        exePath,
+                        flags,
+                        10,
+                        FWP_ACTION_PERMIT,
+                        new[]
+                        {
+                            MakeAppIdCondition(appIdBlobPtr),
+                            new FWPM_FILTER_CONDITION0
+                            {
+                                fieldKey = FWPM_CONDITION_IP_LOCAL_ADDRESS,
+                                matchType = FWP_MATCH_EQUAL,
+                                conditionValue = new FWP_VALUE0 { type = FWP_UINT32, value = hostOrderIp }
+                            }
+                        });
+                }
+                else
+                {
+                    byte[] bytes16 = ip.GetAddressBytes();
+                    IntPtr addr16Ptr = Marshal.AllocHGlobal(16);
+                    try
+                    {
+                        Marshal.Copy(bytes16, 0, addr16Ptr, 16);
+                        AddSingleFilter(engine,
+                            DeriveDeterministicGuid(string.Format("{0}:ALLOW_{1}_{2}", appHash, tag, i)),
+                            layer,
+                            string.Format("ZT-AppLocker [{0}] Permit ZeroTier {1} ({2})", leaf, tag, ip),
+                            exePath,
+                            flags,
+                            10,
+                            FWP_ACTION_PERMIT,
+                            new[]
+                            {
+                                MakeAppIdCondition(appIdBlobPtr),
+                                new FWPM_FILTER_CONDITION0
+                                {
+                                    fieldKey = FWPM_CONDITION_IP_LOCAL_ADDRESS,
+                                    matchType = FWP_MATCH_EQUAL,
+                                    conditionValue = new FWP_VALUE0 { type = FWP_BYTE_ARRAY16_TYPE, value = unchecked((ulong)addr16Ptr.ToInt64()) }
+                                }
+                            });
+                    }
+                    finally
+                    {
+                        Marshal.FreeHGlobal(addr16Ptr);
+                    }
+                }
             }
+
+            // 3. Catch-all block on all non-ZeroTier interfaces (ISP / Wi-Fi / Ethernet kill-switch)
+            AddSingleFilter(engine,
+                DeriveDeterministicGuid(appHash + ":BLOCK_" + tag),
+                layer,
+                string.Format("ZT-AppLocker [{0}] Catch-All Block {1}", leaf, tag),
+                exePath,
+                flags,
+                1,
+                FWP_ACTION_BLOCK,
+                new[] { MakeAppIdCondition(appIdBlobPtr) });
+        }
+
+        private static string ResolveAdapterGuidFromLuid(ulong luid)
+        {
+            foreach (NetworkInterface nic in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                try
+                {
+                    if (ResolveInterfaceLuid(nic.Id) == luid)
+                        return nic.Id;
+                }
+                catch { }
+            }
+            throw new InvalidOperationException("Unable to map ZeroTier interface LUID back to adapter GUID.");
         }
 
         private static FWPM_FILTER_CONDITION0 MakeAppIdCondition(IntPtr appIdBlobPtr)
@@ -633,7 +720,7 @@ namespace ZTAppLocker
 
         private static void DeleteAppFiltersInTransaction(IntPtr engine, string appHash)
         {
-            string[] suffixes = { "LOOP_V4", "ALLOW_V4", "BLOCK_V4", "LOOP_V6", "ALLOW_V6", "BLOCK_V6", "BOOT_V4", "BOOT_V6" };
+            string[] suffixes = { "LOOP_V4", "ALLOW_V4", "ALLOW_V4_0", "ALLOW_V4_1", "ALLOW_V4_2", "BLOCK_V4", "LOOP_V6", "ALLOW_V6", "ALLOW_V6_0", "ALLOW_V6_1", "ALLOW_V6_2", "BLOCK_V6", "BOOT_V4", "BOOT_V6" };
             foreach (string s in suffixes)
             {
                 Guid g = DeriveDeterministicGuid(appHash + ":" + s);
@@ -722,5 +809,6 @@ namespace ZTAppLocker
         }
     }
 }
+
 
 
