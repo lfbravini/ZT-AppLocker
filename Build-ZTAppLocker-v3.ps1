@@ -1,9 +1,4 @@
 #Requires -Version 5.1
-<#
-.SYNOPSIS
-    Compiles ZT-AppLocker v3.0 (ZeroTier Control Plane + Native WFP Kernel Enforcer)
-#>
-
 $ErrorActionPreference = "Stop"
 
 $CscPath = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
@@ -20,7 +15,6 @@ $IconPath    = Join-Path $DistDir "ZTAppLocker.ico"
 $DistExePath = Join-Path $DistDir "ZT-AppLocker.exe"
 $DesktopExe  = "$([Environment]::GetFolderPath('Desktop'))\ZT-AppLocker.exe"
 
-# --- 1. GENERATE SHIELD + PADLOCK .ICO ---
 Write-Host "[1/3] Generating Shield + Network Lock icon..." -ForegroundColor Cyan
 
 Add-Type -AssemblyName System.Drawing
@@ -86,7 +80,6 @@ $icoStream.Close()
 $g.Dispose()
 $bmp.Dispose()
 
-# --- 2. COMPILE ALL MODULAR C# SOURCES ---
 Write-Host "[2/3] Compiling modular C# v3.0 sources via csc.exe..." -ForegroundColor Cyan
 
 $CsFiles = Get-ChildItem -Path $SrcDir -Filter "*.cs" | Select-Object -ExpandProperty FullName
@@ -101,6 +94,7 @@ if ($CsFiles.Count -eq 0) {
     /nologo `
     /win32icon:"$IconPath" `
     /out:"$DistExePath" `
+    /reference:Microsoft.CSharp.dll `
     /reference:System.dll `
     /reference:System.Core.dll `
     /reference:System.Drawing.dll `
@@ -117,7 +111,5 @@ $DesktopDir = [Environment]::GetFolderPath('Desktop')
 if (-not [string]::IsNullOrWhiteSpace($DesktopDir) -and (Test-Path $DesktopDir)) {
     Copy-Item -Path $DistExePath -Destination $DesktopExe -Force
 }
-Write-Host "[3/3] SUCCESS! Built ZT-AppLocker v3.0 at:" -ForegroundColor Green
-Write-Host "      - $DistExePath" -ForegroundColor Green
-Write-Host "      - $DesktopExe" -ForegroundColor Green
 
+Write-Host "[3/3] SUCCESS! Built ZT-AppLocker v3.0 at: $DistExePath" -ForegroundColor Green
