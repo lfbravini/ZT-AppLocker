@@ -141,11 +141,12 @@ namespace ZTAppLocker
             if (!TryGetEndpoint(out baseUrl, out token))
                 return null;
 
+            int timeoutMs = (method == "GET") ? 2500 : 12000;
             HttpWebRequest req = (HttpWebRequest)WebRequest.Create(baseUrl + path);
             req.Method = method;
             req.Headers["X-ZT1-Auth"] = token;
-            req.Timeout = 2000;
-            req.ReadWriteTimeout = 2000;
+            req.Timeout = timeoutMs;
+            req.ReadWriteTimeout = timeoutMs;
 
             if (jsonBody != null)
             {
@@ -211,7 +212,8 @@ namespace ZTAppLocker
                 HttpWebRequest req = (HttpWebRequest)WebRequest.Create(baseUrl + "/network/" + cleanId);
                 req.Method = "DELETE";
                 req.Headers["X-ZT1-Auth"] = token;
-                req.Timeout = 2000;
+                req.Timeout = 5000;
+                req.ReadWriteTimeout = 5000;
                 using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse())
                 {
                     return (int)resp.StatusCode >= 200 && (int)resp.StatusCode < 300;
