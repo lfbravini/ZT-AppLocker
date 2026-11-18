@@ -104,7 +104,7 @@ namespace ZTAppLocker
                 InstallTapDriver();
 
                 // Official ZeroTier Windows SCM format: "<exe>" -C "<DataDir>"
-                string binPath = string.Format("\"{0}\" -C \"{1}\"", DaemonExePath, DataDir);
+                string binPath = string.Format("\"{0}\" \"{1}\"", DaemonExePath, DataDir);
                 string escapedBinPath = binPath.Replace("\"", "\\\"");
 
                 if (!IsPrivateTunnelInstalled())
@@ -321,6 +321,7 @@ namespace ZTAppLocker
         }
     }
 }
+
 
 
 
