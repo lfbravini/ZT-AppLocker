@@ -1,3 +1,4 @@
+using System.Net.Sockets;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -79,6 +80,16 @@ namespace ZTAppLocker
         public string Version { get; set; }
         public string LinkMode { get; set; }
         public string PeerSummary { get; set; }
+    }
+
+    public class ZtAdapterBinding
+    {
+        public string NetworkId { get; set; }
+        public string AdapterGuid { get; set; }
+        public int InterfaceIndex { get; set; }
+        public IPAddress LocalIpv4 { get; set; }
+        public IPAddress ManagedGatewayIpv4 { get; set; }
+        public bool IsReady { get { return InterfaceIndex > 0 && LocalIpv4 != null; } }
     }
 
     public static class ZeroTierApi
@@ -349,6 +360,92 @@ namespace ZTAppLocker
             }
 
             return summary;
+        }
+
+        public static ZtAdapterBinding ResolveNetworkBinding(string networkId)
+        {
+            if (string.IsNullOrWhiteSpace(networkId)) return null;
+            List<ZtNetworkInfo> nets = GetNetworks();
+            ZtNetworkInfo net = nets.FirstOrDefault(n => string.Equals(n.Id, networkId.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (net == null) return null;
+
+            string guidStr = ResolveAdapterGuidForNetwork(net);
+            if (string.IsNullOrWhiteSpace(guidStr)) return null;
+
+            Guid targetGuid;
+            if (!Guid.TryParse(guidStr, out targetGuid)) return null;
+
+            int ifIndex = -1;
+            IPAddress localIp = null;
+            foreach (NetworkInterface nic in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                Guid g;
+                if (Guid.TryParse(nic.Id, out g) && g == targetGuid)
+                {
+                    IPInterfaceProperties ipProps = nic.GetIPProperties();
+                    IPv4InterfaceProperties v4 = ipProps.GetIPv4Properties();
+                    if (v4 != null) ifIndex = v4.Index;
+                    foreach (UnicastIPAddressInformation uni in ipProps.UnicastAddresses)
+                    {
+                        if (uni.Address.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(uni.Address))
+                        {
+                            localIp = uni.Address;
+                            break;
+                        }
+                    }
+                    break;
+                }
+            }
+
+            if (ifIndex <= 0 || localIp == null) return null;
+
+            IPAddress gwIp = null;
+            try
+            {
+                string baseUrl, token;
+                if (TryGetEndpoint(out baseUrl, out token))
+                {
+                    string json = SendJsonRaw("GET", "/network/" + net.Id.ToLowerInvariant(), null);
+                    if (!string.IsNullOrEmpty(json))
+                    {
+                        var m = System.Text.RegularExpressions.Regex.Match(
+                            json,
+                            "\"target\"\\s*:\\s*\"0\\.0\\.0\\.0/0\"\\s*,\\s*\"via\"\\s*:\\s*\"([0-9]{1,3}(?:\\.[0-9]{1,3}){3})\""
+                        );
+                        if (m.Success)
+                        {
+                            IPAddress parsedGw;
+                            if (IPAddress.TryParse(m.Groups[1].Value, out parsedGw))
+                                gwIp = parsedGw;
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            return new ZtAdapterBinding
+            {
+                NetworkId = net.Id,
+                AdapterGuid = guidStr,
+                InterfaceIndex = ifIndex,
+                LocalIpv4 = localIp,
+                ManagedGatewayIpv4 = gwIp
+            };
+        }
+
+        private static string SendJsonRaw(string method, string path, string body)
+        {
+            string baseUrl, token;
+            if (!TryGetEndpoint(out baseUrl, out token)) return null;
+            HttpWebRequest req = (HttpWebRequest)WebRequest.Create(baseUrl + path);
+            req.Method = method;
+            req.Headers["X-ZT1-Auth"] = token;
+            req.Timeout = 2500;
+            using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse())
+            using (StreamReader sr = new StreamReader(resp.GetResponseStream()))
+            {
+                return sr.ReadToEnd();
+            }
         }
 
         public static string ResolveAdapterGuidForNetwork(ZtNetworkInfo net)

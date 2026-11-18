@@ -27,7 +27,7 @@ $DesktopExe  = "$([Environment]::GetFolderPath('Desktop'))\ZT-AppLocker.exe"
 # --- 1. HARVEST OR FETCH LATEST HEADLESS ZEROTIER CORE + SIGNED TAP DRIVER ---
 Write-Host "[1/4] Preparing self-contained ZeroTier core & signed TAP driver payload..." -ForegroundColor Cyan
 
-$RequiredPayload = @("zerotier-one_x64.exe", "zttap300.sys", "zttap300.inf", "zttap300.cat")
+$RequiredPayload = @("zerotier-one_x64.exe", "zttap300.sys", "zttap300.inf", "zttap300.cat", "WinDivert.dll", "WinDivert64.sys")
 $MissingPayload = $RequiredPayload | Where-Object { -not (Test-Path (Join-Path $PayloadDir $_)) }
 
 if ($UpdateZtCore -or $MissingPayload.Count -gt 0) {

@@ -549,6 +549,7 @@ namespace ZTAppLocker
             }
 
             lstQueue.Items.Clear();
+            SplitTunnelEngine.RefreshBindings();
             // Auto-provision embedded ZeroTier Core + TAP driver on first launch
             new System.Threading.Thread(() => { string initMsg;
                 if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))
@@ -570,6 +571,7 @@ namespace ZTAppLocker
 
             WfpEngine.RemoveAppLock(item.Policy.ExePath);
             PolicyStore.RemoveAppLock(item.Policy.ExePath);
+            SplitTunnelEngine.RefreshBindings();
             // Auto-provision embedded ZeroTier Core + TAP driver on first launch
             new System.Threading.Thread(() => { string initMsg;
                 if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))
@@ -590,6 +592,7 @@ namespace ZTAppLocker
             {
                 WfpEngine.PurgeAllWfpFilters();
                 PolicyStore.ClearAllApps();
+                SplitTunnelEngine.RefreshBindings();
                 // Auto-provision embedded ZeroTier Core + TAP driver on first launch
             new System.Threading.Thread(() => { string initMsg;
                 if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))

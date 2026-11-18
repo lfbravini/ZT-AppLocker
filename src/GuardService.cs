@@ -30,6 +30,7 @@ namespace ZTAppLocker
             WriteServiceLog(ztMsg);
 
             ReconcilePolicyWithWfp(true);
+            SplitTunnelEngine.Start();
 
             NetworkChange.NetworkAvailabilityChanged += (s, e) => ScheduleReconcile();
             NetworkChange.NetworkAddressChanged += (s, e) => ScheduleReconcile();
@@ -43,11 +44,13 @@ namespace ZTAppLocker
             {
                 Thread.Sleep(1000);
                 ReconcilePolicyWithWfp(true);
+            SplitTunnelEngine.Start();
             });
         }
 
         public static void ReconcilePolicyWithWfp(bool verboseLog)
         {
+            SplitTunnelEngine.RefreshBindings();
             AppLockerPolicy policy = PolicyStore.Load();
             if (policy.LockedApps.Count == 0 && !policy.StrictDnsLock)
                 return;
@@ -103,6 +106,7 @@ namespace ZTAppLocker
 
         protected override void OnStop()
         {
+            SplitTunnelEngine.Stop();
             try { if (_reconcileTimer != null) _reconcileTimer.Dispose(); } catch { }
             WriteServiceLog("ZTAppLockerGuard v3.0 stopped.");
         }

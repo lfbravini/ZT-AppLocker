@@ -576,25 +576,28 @@ namespace ZTAppLocker
                 FwpmFilterDeleteByKey0(engine, ref idxAllow);
             }
 
-            // 1. Permit Loopback (localhost IPC)
-            AddSingleFilter(engine,
-                DeriveDeterministicGuid(appHash + ":LOOP_" + tag),
-                layer,
-                string.Format("ZT-AppLocker [{0}] Permit Loopback {1}", leaf, tag),
-                exePath,
-                flags,
-                15,
-                FWP_ACTION_PERMIT,
-                new[]
-                {
-                    MakeAppIdCondition(appIdBlobPtr),
-                    new FWPM_FILTER_CONDITION0
+            // 1. Permit Loopback (only supported on ALE_AUTH_CONNECT layers; OUTBOUND_TRANSPORT does not have FWPM_CONDITION_FLAGS)
+            if (layer == FWPM_LAYER_ALE_AUTH_CONNECT_V4 || layer == FWPM_LAYER_ALE_AUTH_CONNECT_V6)
+            {
+                AddSingleFilter(engine,
+                    DeriveDeterministicGuid(appHash + ":LOOP_" + tag),
+                    layer,
+                    string.Format("ZT-AppLocker [{0}] Permit Loopback {1}", leaf, tag),
+                    exePath,
+                    flags,
+                    15,
+                    FWP_ACTION_PERMIT,
+                    new[]
                     {
-                        fieldKey = FWPM_CONDITION_FLAGS,
-                        matchType = FWP_MATCH_FLAGS_ALL_SET,
-                        conditionValue = new FWP_VALUE0 { type = FWP_UINT32, value = FWP_CONDITION_FLAG_IS_LOOPBACK }
-                    }
-                });
+                        MakeAppIdCondition(appIdBlobPtr),
+                        new FWPM_FILTER_CONDITION0
+                        {
+                            fieldKey = FWPM_CONDITION_FLAGS,
+                            matchType = FWP_MATCH_FLAGS_ALL_SET,
+                            conditionValue = new FWP_VALUE0 { type = FWP_UINT32, value = FWP_CONDITION_FLAG_IS_LOOPBACK }
+                        }
+                    });
+            }
 
             // 2. Permit outbound traffic bound to the ZeroTier virtual adapter's assigned IP(s)
             // Note: ALE_AUTH_CONNECT supports FWPM_CONDITION_IP_LOCAL_ADDRESS (whereas IP_LOCAL_INTERFACE is transport-layer only)
@@ -663,16 +666,10 @@ namespace ZTAppLocker
                 }
             }
 
-            // 3. Catch-all block on all non-ZeroTier interfaces (ISP / Wi-Fi / Ethernet kill-switch)
-            AddSingleFilter(engine,
-                DeriveDeterministicGuid(appHash + ":BLOCK_" + tag),
-                layer,
-                string.Format("ZT-AppLocker [{0}] Catch-All Block {1}", leaf, tag),
-                exePath,
-                flags,
-                1,
-                FWP_ACTION_BLOCK,
-                new[] { MakeAppIdCondition(appIdBlobPtr) });
+            // 3. Delete any legacy ALE_AUTH_CONNECT catch-all block so outbound packets reach SplitTunnelEngine WinDivert layer
+            // (SplitTunnelEngine enforces fail-closed ZeroTier interface binding per-PID; Boot-Time Guard still blocks at boot)
+            Guid legacyBlock = DeriveDeterministicGuid(appHash + ":BLOCK_" + tag);
+            FwpmFilterDeleteByKey0(engine, ref legacyBlock);
         }
 
         private static string ResolveAdapterGuidFromLuid(ulong luid)
