@@ -312,7 +312,6 @@ namespace ZTAppLocker
 
             if (ztNics.Count == 0) return null;
 
-            // 1. Match by assigned IPv4 address (handles multi-network setups accurately)
             if (net.AssignedAddresses != null)
             {
                 foreach (string cidr in net.AssignedAddresses)
@@ -328,7 +327,6 @@ namespace ZTAppLocker
                 }
             }
 
-            // 2. Fallback: match by MAC address or single active ZeroTier NIC
             if (!string.IsNullOrWhiteSpace(net.Mac))
             {
                 string targetMac = net.Mac.Replace(":", "").Replace("-", "").ToUpperInvariant();

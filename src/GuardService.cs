@@ -12,7 +12,6 @@ namespace ZTAppLocker
     {
         public const string GuardServiceName = "ZTAppLockerGuard";
         private System.Threading.Timer _reconcileTimer;
-        private readonly object _syncLock = new object();
 
         public GuardService()
         {
