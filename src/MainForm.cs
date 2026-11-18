@@ -117,14 +117,36 @@ namespace ZTAppLocker
                 string msg;
                 bool ok = ZeroTierApi.EnsureDaemonServiceRunning(out msg);
                 MessageBox.Show(msg, "ZeroTier Core Service", MessageBoxButtons.OK, ok ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
-                RefreshAll(true);
+                // Auto-provision embedded ZeroTier Core + TAP driver on first launch
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                string initMsg;
+                if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))
+                {
+                    if (!IsDisposed && IsHandleCreated)
+                        BeginInvoke((Action)(() => RefreshAll(true)));
+                }
+            });
+
+            RefreshAll(true);
             };
             btnInstallSvc.Click += (s, e) =>
             {
                 string msg;
                 bool ok = ServiceManager.InstallAndStart(out msg);
                 MessageBox.Show(msg, "Guard Service Installer", MessageBoxButtons.OK, ok ? MessageBoxIcon.Information : MessageBoxIcon.Information);
-                RefreshAll(true);
+                // Auto-provision embedded ZeroTier Core + TAP driver on first launch
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                string initMsg;
+                if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))
+                {
+                    if (!IsDisposed && IsHandleCreated)
+                        BeginInvoke((Action)(() => RefreshAll(true)));
+                }
+            });
+
+            RefreshAll(true);
             };
             btnUninstallSvc.Click += (s, e) =>
             {
@@ -134,7 +156,18 @@ namespace ZTAppLocker
                 string msg;
                 ServiceManager.UninstallAndClean(res == DialogResult.Yes, out msg);
                 MessageBox.Show(msg, "Uninstall Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                RefreshAll(true);
+                // Auto-provision embedded ZeroTier Core + TAP driver on first launch
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                string initMsg;
+                if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))
+                {
+                    if (!IsDisposed && IsHandleCreated)
+                        BeginInvoke((Action)(() => RefreshAll(true)));
+                }
+            });
+
+            RefreshAll(true);
             };
             btnViewLog.Click += (s, e) => ShowLogViewer();
 
@@ -326,6 +359,17 @@ namespace ZTAppLocker
                 if (_trayIcon != null) { _trayIcon.Visible = false; _trayIcon.Dispose(); }
             };
 
+            // Auto-provision embedded ZeroTier Core + TAP driver on first launch
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                string initMsg;
+                if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))
+                {
+                    if (!IsDisposed && IsHandleCreated)
+                        BeginInvoke((Action)(() => RefreshAll(true)));
+                }
+            });
+
             RefreshAll(true);
         }
 
@@ -342,7 +386,18 @@ namespace ZTAppLocker
                 ZeroTierApi.JoinOrConfigureNetwork(nwid, null, true, false, null);
                 txtNetworkId.Clear();
                 lblStatus.Text = "Joined ZeroTier network " + nwid + ". Authorizing / assigning IP...";
-                RefreshAll(true);
+                // Auto-provision embedded ZeroTier Core + TAP driver on first launch
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                string initMsg;
+                if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))
+                {
+                    if (!IsDisposed && IsHandleCreated)
+                        BeginInvoke((Action)(() => RefreshAll(true)));
+                }
+            });
+
+            RefreshAll(true);
             }
             catch (Exception ex)
             {
@@ -361,7 +416,18 @@ namespace ZTAppLocker
                 if (ZeroTierApi.LeaveNetwork(net.Id))
                 {
                     lblStatus.Text = "Left ZeroTier network " + net.Id;
-                    RefreshAll(true);
+                    // Auto-provision embedded ZeroTier Core + TAP driver on first launch
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                string initMsg;
+                if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))
+                {
+                    if (!IsDisposed && IsHandleCreated)
+                        BeginInvoke((Action)(() => RefreshAll(true)));
+                }
+            });
+
+            RefreshAll(true);
                 }
             }
         }
@@ -394,7 +460,18 @@ namespace ZTAppLocker
                 ZeroTierApi.JoinOrConfigureNetwork(net.Id, chkAllowDefault.Checked, null, null, chkAllowDns.Checked);
                 lblStatus.Text = string.Format("Updated [{0}]: allowDefault={1}, allowDNS={2}",
                     net.Id, chkAllowDefault.Checked, chkAllowDns.Checked);
-                RefreshAll(true);
+                // Auto-provision embedded ZeroTier Core + TAP driver on first launch
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                string initMsg;
+                if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))
+                {
+                    if (!IsDisposed && IsHandleCreated)
+                        BeginInvoke((Action)(() => RefreshAll(true)));
+                }
+            });
+
+            RefreshAll(true);
             }
             catch (Exception ex)
             {
@@ -486,6 +563,17 @@ namespace ZTAppLocker
             }
 
             lstQueue.Items.Clear();
+            // Auto-provision embedded ZeroTier Core + TAP driver on first launch
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                string initMsg;
+                if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))
+                {
+                    if (!IsDisposed && IsHandleCreated)
+                        BeginInvoke((Action)(() => RefreshAll(true)));
+                }
+            });
+
             RefreshAll(true);
             lblStatus.Text = string.Format("Locked {0} app(s) in WFP kernel to [{1}] (severed {2} existing non-ZT socket(s)).",
                 lockedCount, net.Id, severedTotal);
@@ -498,6 +586,17 @@ namespace ZTAppLocker
 
             WfpEngine.RemoveAppLock(item.Policy.ExePath);
             PolicyStore.RemoveAppLock(item.Policy.ExePath);
+            // Auto-provision embedded ZeroTier Core + TAP driver on first launch
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                string initMsg;
+                if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))
+                {
+                    if (!IsDisposed && IsHandleCreated)
+                        BeginInvoke((Action)(() => RefreshAll(true)));
+                }
+            });
+
             RefreshAll(true);
             lblStatus.Text = "Removed WFP kernel filters for " + Path.GetFileName(item.Policy.ExePath);
         }
@@ -509,7 +608,18 @@ namespace ZTAppLocker
             {
                 WfpEngine.PurgeAllWfpFilters();
                 PolicyStore.ClearAllApps();
-                RefreshAll(true);
+                // Auto-provision embedded ZeroTier Core + TAP driver on first launch
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                string initMsg;
+                if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))
+                {
+                    if (!IsDisposed && IsHandleCreated)
+                        BeginInvoke((Action)(() => RefreshAll(true)));
+                }
+            });
+
+            RefreshAll(true);
                 lblStatus.Text = "Purged all WFP kernel filters cleanly.";
             }
         }
@@ -526,6 +636,17 @@ namespace ZTAppLocker
                 string guid = ZeroTierApi.ResolveAdapterGuidForNetwork(net);
                 totalSevered += SocketManager.SeverNonCompliantSockets(entry.ExePath, guid);
             }
+
+            // Auto-provision embedded ZeroTier Core + TAP driver on first launch
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                string initMsg;
+                if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))
+                {
+                    if (!IsDisposed && IsHandleCreated)
+                        BeginInvoke((Action)(() => RefreshAll(true)));
+                }
+            });
 
             RefreshAll(true);
             lblStatus.Text = string.Format("Severed {0} established non-ZeroTier TCP socket(s) across locked applications.", totalSevered);
@@ -866,7 +987,18 @@ namespace ZTAppLocker
                         {
                             PolicyStore.Save(imported);
                             GuardService.ReconcilePolicyWithWfp(false);
-                            RefreshAll(true);
+                            // Auto-provision embedded ZeroTier Core + TAP driver on first launch
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                string initMsg;
+                if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))
+                {
+                    if (!IsDisposed && IsHandleCreated)
+                        BeginInvoke((Action)(() => RefreshAll(true)));
+                }
+            });
+
+            RefreshAll(true);
                             lblStatus.Text = "Imported policy and reconciled WFP kernel locks.";
                         }
                     }
@@ -879,6 +1011,17 @@ namespace ZTAppLocker
             Show();
             WindowState = FormWindowState.Normal;
             Activate();
+            // Auto-provision embedded ZeroTier Core + TAP driver on first launch
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                string initMsg;
+                if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))
+                {
+                    if (!IsDisposed && IsHandleCreated)
+                        BeginInvoke((Action)(() => RefreshAll(true)));
+                }
+            });
+
             RefreshAll(true);
         }
 
@@ -920,7 +1063,18 @@ namespace ZTAppLocker
                             btnUpdZt.Enabled = true;
                             btnUpdZt.Text = "Update Embedded ZT Core (Online)";
                             MessageBox.Show(res, "ZT Core Updated", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                            RefreshAll(true);
+                            // Auto-provision embedded ZeroTier Core + TAP driver on first launch
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                string initMsg;
+                if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))
+                {
+                    if (!IsDisposed && IsHandleCreated)
+                        BeginInvoke((Action)(() => RefreshAll(true)));
+                }
+            });
+
+            RefreshAll(true);
                         }));
                     }
                     catch (Exception ex)
@@ -943,5 +1097,6 @@ namespace ZTAppLocker
         }
     }
 }
+
 
 
