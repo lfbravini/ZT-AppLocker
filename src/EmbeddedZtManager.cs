@@ -14,7 +14,7 @@ namespace ZTAppLocker
     public static class EmbeddedZtManager
     {
         public const string TunnelServiceName = "ZeroTierOneService";
-        public const int ControlPort = 9994;
+        public const int ControlPort = 9993;
         public const string OfficialMsiUrl = "https://download.zerotier.com/dist/ZeroTier%20One.msi";
 
         public static string CoreDir
@@ -60,10 +60,7 @@ namespace ZTAppLocker
             if (!Directory.Exists(DataDir))
                 Directory.CreateDirectory(DataDir);
 
-            // Pre-configure custom control port 9994 so ZT never collides with port 9993
-            string portFile = Path.Combine(DataDir, "zerotier-one.port");
-            if (!File.Exists(portFile))
-                File.WriteAllText(portFile, ControlPort.ToString());
+            // Let zerotier-one_x64.exe write its own active zerotier-one.port (9993) into DataDir
 
             Assembly asm = Assembly.GetExecutingAssembly();
             string[] resNames = asm.GetManifestResourceNames();
@@ -293,4 +290,5 @@ namespace ZTAppLocker
         }
     }
 }
+
 
