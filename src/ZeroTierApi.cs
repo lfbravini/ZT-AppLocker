@@ -85,33 +85,21 @@ namespace ZTAppLocker
     {
         private static string ZtDataDir
         {
-            get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), @"ZeroTier\One"); }
+            get { return EmbeddedZtManager.DataDir; }
         }
 
         public static bool EnsureDaemonServiceRunning(out string statusDetail)
         {
-            string[] candidates = { "ZeroTierOneService", "ZeroTier One" };
-            foreach (string svcName in candidates)
+            try
             {
-                try
-                {
-                    using (ServiceController sc = new ServiceController(svcName))
-                    {
-                        var st = sc.Status;
-                        if (st != ServiceControllerStatus.Running)
-                        {
-                            sc.Start();
-                            sc.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(12));
-                        }
-                        statusDetail = "ZeroTier Core Service (" + svcName + ") is Running.";
-                        return true;
-                    }
-                }
-                catch { }
+                EmbeddedZtManager.ProvisionAndStartPrivateTunnel(false, out statusDetail);
+                return true;
             }
-
-            statusDetail = "ZeroTier Windows Service not found. Install ZeroTier One core driver/service.";
-            return false;
+            catch (Exception ex)
+            {
+                statusDetail = ex.Message;
+                return false;
+            }
         }
 
         private static bool TryGetEndpoint(out string baseUrl, out string token)
@@ -125,7 +113,7 @@ namespace ZTAppLocker
                 if (!File.Exists(tokenPath)) return false;
 
                 token = File.ReadAllText(tokenPath).Trim();
-                string port = File.Exists(portPath) ? File.ReadAllText(portPath).Trim() : "9993";
+                string port = File.Exists(portPath) ? File.ReadAllText(portPath).Trim() : EmbeddedZtManager.ControlPort.ToString();
                 baseUrl = string.Format("http://127.0.0.1:{0}", port);
                 return !string.IsNullOrEmpty(token);
             }
@@ -344,3 +332,4 @@ namespace ZTAppLocker
         }
     }
 }
+

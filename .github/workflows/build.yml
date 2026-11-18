@@ -1,10 +1,14 @@
-name: Build ZT-AppLocker (x64)
+name: Build ZT-AppLocker v4.0 (Self-Contained x64)
 
 on:
   push:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  schedule:
+    # Weekly automated rebuild to bundle the newest upstream ZeroTier core release
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -16,13 +20,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Compile ZT-AppLocker v3.0 with Windows PowerShell 5.1 & csc.exe
+      - name: Build self-contained ZT-AppLocker v4.0 (with latest ZeroTier core & TAP driver)
         shell: powershell
-        run: .\Build-ZTAppLocker-v3.ps1
+        run: .\Build-ZTAppLocker-v4.ps1 -UpdateZtCore
 
-      - name: Upload compiled ZT-AppLocker.exe artifact
+      - name: Upload self-contained ZT-AppLocker.exe artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ZT-AppLocker-v3.0-x64
+          name: ZT-AppLocker-v4.0-SelfContained-x64
           path: dist/ZT-AppLocker.exe
           if-no-files-found: error

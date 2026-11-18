@@ -54,13 +54,16 @@ namespace ZTAppLocker
                     File.Copy(currentExe, InstalledExePath, true);
                 }
 
+                string ztDetail;
+                EmbeddedZtManager.ProvisionAndStartPrivateTunnel(false, out ztDetail);
+
                 string binPath = string.Format("\"{0}\" --service", InstalledExePath);
 
                 if (GetServiceStatus() == "NotInstalled")
                 {
                     RunSc(string.Format("create {0} binPath= \"{1}\" start= auto DisplayName= \"ZT-AppLocker Kernel Kill-Switch Guard\"",
                         GuardService.GuardServiceName, binPath.Replace("\"", "\\\"")));
-                    RunSc(string.Format("description {0} \"Manages ZeroTier network binding and enforces native WFP per-application kill-switches.\"",
+                    RunSc(string.Format("description {0} \"Manages embedded ZeroTier tunnel and enforces native WFP per-application kill-switches.\"",
                         GuardService.GuardServiceName));
                     RunSc(string.Format("failure {0} reset= 86400 actions= restart/5000/restart/5000/restart/5000",
                         GuardService.GuardServiceName));
@@ -80,10 +83,10 @@ namespace ZTAppLocker
                     }
                 }
 
-                CreateShortcut(PublicDesktopShortcut, InstalledExePath, "ZT-AppLocker v3.0 - ZeroTier Client & WFP Kill-Switch");
-                CreateShortcut(StartMenuShortcut, InstalledExePath, "ZT-AppLocker v3.0 - ZeroTier Client & WFP Kill-Switch");
+                CreateShortcut(PublicDesktopShortcut, InstalledExePath, "ZT-AppLocker v4.0 - Self-Contained ZeroTier & WFP Kill-Switch");
+                CreateShortcut(StartMenuShortcut, InstalledExePath, "ZT-AppLocker v4.0 - Self-Contained ZeroTier & WFP Kill-Switch");
 
-                message = "ZTAppLockerGuard v3.0 installed to C:\\Program Files\\ZT-AppLocker, started, and shortcuts updated.";
+                message = "ZT-AppLocker v4.0 installed: Embedded ZeroTier Core + TAP Driver + Kernel WFP Guard are active.";
                 return true;
             }
             catch (Exception ex)
@@ -98,6 +101,7 @@ namespace ZTAppLocker
             try
             {
                 StopServiceIfRunning();
+                EmbeddedZtManager.StopAndRemovePrivateTunnel(purgeWfpFilters);
                 RunSc("delete " + GuardService.GuardServiceName);
 
                 if (purgeWfpFilters)
@@ -121,8 +125,8 @@ namespace ZTAppLocker
                 }
 
                 message = purgeWfpFilters
-                    ? "Windows Service, shortcuts, and all WFP kernel filters purged cleanly."
-                    : "Windows Service and shortcuts uninstalled cleanly (WFP filters preserved).";
+                    ? "Guard service, embedded ZeroTier tunnel, TAP driver, and WFP filters purged cleanly."
+                    : "Guard service and embedded ZeroTier tunnel uninstalled cleanly (WFP filters preserved).";
                 return true;
             }
             catch (Exception ex)

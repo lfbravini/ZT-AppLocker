@@ -1,13 +1,13 @@
-﻿# Compiled binaries & generated artifacts
 *.exe
 *.ico
 *.pdb
 *.log
 *.old
+*.msi
 dist/
 build/
-
-# Windows & IDE files
+.cache/
+embedded_zt/
 Thumbs.db
 .vs/
 *.user

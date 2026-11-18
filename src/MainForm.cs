@@ -69,7 +69,7 @@ namespace ZTAppLocker
 
         public MainForm()
         {
-            Text = "ZT-AppLocker v3.0 | ZeroTier Control Plane & Native WFP Kernel Kill-Switch";
+            Text = "ZT-AppLocker v4.0 (Self-Contained) | ZeroTier Control Plane & Native WFP Kernel Kill-Switch";
             Icon appIcon = null;
             try { appIcon = Icon.ExtractAssociatedIcon(Process.GetCurrentProcess().MainModule.FileName); } catch { }
             if (appIcon != null) Icon = appIcon;
@@ -96,7 +96,7 @@ namespace ZTAppLocker
             _trayIcon = new NotifyIcon
             {
                 Icon = appIcon ?? SystemIcons.Shield,
-                Text = "ZT-AppLocker v3.0: Initializing...",
+                Text = "ZT-AppLocker v4.0 (Self-Contained): Initializing...",
                 ContextMenuStrip = trayMenu,
                 Visible = true
             };
@@ -104,13 +104,13 @@ namespace ZTAppLocker
 
             // 1. Top Banner: ZeroTier Core + Guard Service Status
             pnlTopStatus = new Panel { Location = new Point(16, 12), Size = new Size(712, 56), BorderStyle = BorderStyle.FixedSingle, BackColor = Color.FromArgb(240, 246, 252) };
-            lblNodeStatus = new Label { Location = new Point(10, 6), Size = new Size(390, 20), Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), UseMnemonic = false };
-            lblDaemonDetail = new Label { Location = new Point(10, 28), Size = new Size(390, 20), Font = new Font("Segoe UI", 8.5f), ForeColor = Color.DimGray, UseMnemonic = false };
+            lblNodeStatus = new Label { Location = new Point(10, 6), Size = new Size(300, 20), Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), UseMnemonic = false };
+            lblDaemonDetail = new Label { Location = new Point(10, 28), Size = new Size(300, 20), Font = new Font("Segoe UI", 8.5f), ForeColor = Color.DimGray, UseMnemonic = false };
 
-            btnStartZtDaemon = new Button { Text = "Start ZT Core", Location = new Point(402, 12), Size = new Size(92, 30), Visible = false };
+            btnStartZtDaemon = new Button { Text = "Init ZT Core", Location = new Point(312, 12), Size = new Size(84, 30), Visible = false };
             btnInstallSvc = new Button { Text = "Install Guard", Location = new Point(402, 12), Size = new Size(100, 30) };
             btnUninstallSvc = new Button { Text = "Uninstall", Location = new Point(508, 12), Size = new Size(88, 30) };
-            btnViewLog = new Button { Text = "Guard Log", Location = new Point(602, 12), Size = new Size(98, 30) };
+            btnViewLog = new Button { Text = "Log / Update", Location = new Point(602, 12), Size = new Size(98, 30) };
 
             btnStartZtDaemon.Click += (s, e) =>
             {
@@ -625,11 +625,11 @@ namespace ZTAppLocker
                 pnlTopStatus.BackColor = Color.FromArgb(253, 231, 233);
                 lblNodeStatus.ForeColor = Color.DarkRed;
                 lblNodeStatus.Text = "ZEROTIER CORE OFFLINE (All Locked Apps Fail-Closed)";
-                lblDaemonDetail.Text = "Start ZeroTier Core service or verify ZeroTier One installation.";
+                lblDaemonDetail.Text = "Click Init ZT Core to unpack embedded ZeroTier + TAP driver.";
                 btnStartZtDaemon.Visible = true;
-                btnInstallSvc.Location = new Point(500, 12);
-                btnInstallSvc.Size = new Size(92, 30);
-                btnUninstallSvc.Visible = false;
+                btnInstallSvc.Location = new Point(402, 12);
+                btnInstallSvc.Size = new Size(100, 30);
+                btnUninstallSvc.Visible = true;
             }
             else
             {
@@ -899,13 +899,42 @@ namespace ZTAppLocker
             Panel topBar = new Panel { Dock = DockStyle.Top, Height = 36 };
             Button btnRef = new Button { Text = "Refresh Log", Location = new Point(8, 5), Size = new Size(95, 26) };
             Button btnClr = new Button { Text = "Clear Log", Location = new Point(110, 5), Size = new Size(85, 26) };
+            Button btnUpdZt = new Button { Text = "Update Embedded ZT Core (Online)", Location = new Point(485, 5), Size = new Size(230, 26), BackColor = Color.FromArgb(0, 120, 215), ForeColor = Color.White, FlatStyle = FlatStyle.Flat };
             btnRef.Click += (s, e) => loadLog();
             btnClr.Click += (s, e) =>
             {
                 try { if (File.Exists(ServiceManager.LogFilePath)) File.WriteAllText(ServiceManager.LogFilePath, ""); } catch { }
                 loadLog();
             };
-            topBar.Controls.AddRange(new Control[] { btnRef, btnClr });
+            btnUpdZt.Click += (s, e) =>
+            {
+                btnUpdZt.Enabled = false;
+                btnUpdZt.Text = "Downloading & Updating ZT Core...";
+                ThreadPool.QueueUserWorkItem(_ =>
+                {
+                    try
+                    {
+                        string res = EmbeddedZtManager.UpdateEmbeddedCoreFromOfficialRelease();
+                        BeginInvoke((Action)(() =>
+                        {
+                            btnUpdZt.Enabled = true;
+                            btnUpdZt.Text = "Update Embedded ZT Core (Online)";
+                            MessageBox.Show(res, "ZT Core Updated", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            RefreshAll(true);
+                        }));
+                    }
+                    catch (Exception ex)
+                    {
+                        BeginInvoke((Action)(() =>
+                        {
+                            btnUpdZt.Enabled = true;
+                            btnUpdZt.Text = "Update Embedded ZT Core (Online)";
+                            MessageBox.Show("ZT Core update failed: " + ex.Message, "Update Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        }));
+                    }
+                });
+            };
+            topBar.Controls.AddRange(new Control[] { btnRef, btnClr, btnUpdZt });
 
             logForm.Controls.Add(tb);
             logForm.Controls.Add(topBar);
@@ -914,4 +943,5 @@ namespace ZTAppLocker
         }
     }
 }
+
 
