@@ -1,0 +1,13 @@
+﻿# Compiled binaries & generated artifacts
+*.exe
+*.ico
+*.pdb
+*.log
+*.old
+dist/
+build/
+
+# Windows & IDE files
+Thumbs.db
+.vs/
+*.user

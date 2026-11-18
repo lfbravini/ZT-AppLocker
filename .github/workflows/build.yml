@@ -1,0 +1,32 @@
+﻿name: Build ZT-AppLocker (x64)
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Compile with .NET Framework 4.x csc.exe
+        shell: pwsh
+        run: |
+          if (Test-Path ".\Build-ZTAppLocker-v3.ps1") {
+            .\Build-ZTAppLocker-v3.ps1
+          } else {
+            .\Build-ZTAppLocker-v2.5.1.ps1
+          }
+
+      - name: Upload compiled ZT-AppLocker.exe artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZT-AppLocker-x64
+          path: |
+            *\Desktop\ZT-AppLocker.exe
+            dist\ZT-AppLocker.exe
+          if-no-files-found: warn
