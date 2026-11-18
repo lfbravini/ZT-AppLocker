@@ -113,7 +113,11 @@ if ($LASTEXITCODE -ne 0) {
     throw "C# compilation failed with exit code $LASTEXITCODE"
 }
 
-Copy-Item -Path $DistExePath -Destination $DesktopExe -Force
+$DesktopDir = [Environment]::GetFolderPath('Desktop')
+if (-not [string]::IsNullOrWhiteSpace($DesktopDir) -and (Test-Path $DesktopDir)) {
+    Copy-Item -Path $DistExePath -Destination $DesktopExe -Force
+}
 Write-Host "[3/3] SUCCESS! Built ZT-AppLocker v3.0 at:" -ForegroundColor Green
 Write-Host "      - $DistExePath" -ForegroundColor Green
 Write-Host "      - $DesktopExe" -ForegroundColor Green
+
