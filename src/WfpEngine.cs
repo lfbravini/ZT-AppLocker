@@ -46,11 +46,11 @@ namespace ZTAppLocker
         private const uint FWP_MATCH_NOT_EQUAL = 5;
         private const uint FWP_MATCH_FLAGS_ALL_SET = 7;
 
-        private const uint FWP_UINT8 = 2;
-        private const uint FWP_UINT16 = 3;
-        private const uint FWP_UINT32 = 4;
-        private const uint FWP_UINT64 = 5;
-        private const uint FWP_BYTE_BLOB_TYPE = 13;
+        private const uint FWP_UINT8 = 1;
+        private const uint FWP_UINT16 = 2;
+        private const uint FWP_UINT32 = 3;
+        private const uint FWP_UINT64 = 4;
+        private const uint FWP_BYTE_BLOB_TYPE = 12;
 
         private const uint FWP_CONDITION_FLAG_IS_LOOPBACK = 0x00000001;
         private const uint FWP_E_ALREADY_EXISTS = 0x80320009;
@@ -722,4 +722,5 @@ namespace ZTAppLocker
         }
     }
 }
+
 
