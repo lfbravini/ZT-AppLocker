@@ -129,6 +129,7 @@ namespace ZTAppLocker
             public uint numFilterConditions;
             public IntPtr filterCondition;
             public FWPM_ACTION0 action;
+            private uint _actionPad; // Align 8-byte union (rawContext/providerContextKey) to offset 152
             public Guid providerContextKey; // 16-byte union with UINT64 rawContext in fwpmtypes.h
             public IntPtr reserved;
             public ulong filterId;
@@ -721,3 +722,4 @@ namespace ZTAppLocker
         }
     }
 }
+
