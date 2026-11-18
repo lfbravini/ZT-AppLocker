@@ -53,6 +53,7 @@ namespace ZTAppLocker
                 return;
 
             List<ZtNetworkInfo> networks = ZeroTierApi.GetNetworks();
+            if (networks.Any(n => n.AllowDefault)) ZeroTierApi.EnsurePeerTransportBypassRoutes(true);
 
             foreach (AppLockPolicyEntry entry in policy.LockedApps)
             {

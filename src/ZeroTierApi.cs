@@ -168,6 +168,66 @@ namespace ZTAppLocker
             catch { return new List<ZtNetworkInfo>(); }
         }
 
+        public static void EnsurePeerTransportBypassRoutes(bool enable)
+        {
+            try
+            {
+                string baseUrl, token;
+                if (!TryGetEndpoint(out baseUrl, out token)) return;
+
+                HttpWebRequest req = (HttpWebRequest)WebRequest.Create(baseUrl + "/peer");
+                req.Headers["X-ZT1-Auth"] = token;
+                req.Timeout = 3000;
+                string peerJson;
+                using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse())
+                using (StreamReader sr = new StreamReader(resp.GetResponseStream()))
+                {
+                    peerJson = sr.ReadToEnd();
+                }
+
+                var matches = System.Text.RegularExpressions.Regex.Matches(
+                    peerJson,
+                    "\"address\"\\s*:\\s*\"([0-9]{1,3}(?:\\.[0-9]{1,3}){3})/[0-9]+\""
+                );
+                HashSet<string> wanIps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (System.Text.RegularExpressions.Match m in matches)
+                {
+                    string ip = m.Groups[1].Value;
+                    if (!ip.StartsWith("10.") && !ip.StartsWith("192.168.") && !ip.StartsWith("127.") &&
+                        !System.Text.RegularExpressions.Regex.IsMatch(ip, "^172\\.(1[6-9]|2[0-9]|3[0-1])\\."))
+                    {
+                        wanIps.Add(ip);
+                    }
+                }
+                if (wanIps.Count == 0) return;
+
+                string ipList = string.Join(",", wanIps.Select(x => "'" + x + "'"));
+                string ps = enable
+                    ? string.Format(
+                        "$phys = Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue | " +
+                        "Where-Object {{ $_.NextHop -ne '0.0.0.0' -and $_.NextHop -ne '25.255.255.254' -and $_.InterfaceAlias -notlike '*ZeroTier*' }} | " +
+                        "Sort-Object RouteMetric | Select-Object -First 1; " +
+                        "if ($phys) {{ foreach ($ip in @({0})) {{ " +
+                        "  New-NetRoute -InterfaceIndex $phys.InterfaceIndex -DestinationPrefix \"$ip/32\" -NextHop $phys.NextHop -RouteMetric 1 -PolicyStore ActiveStore -ErrorAction SilentlyContinue | Out-Null " +
+                        "}} }}", ipList)
+                    : string.Format(
+                        "foreach ($ip in @({0})) {{ " +
+                        "  Remove-NetRoute -DestinationPrefix \"$ip/32\" -Confirm:$false -ErrorAction SilentlyContinue " +
+                        "}}", ipList);
+
+                var psi = new System.Diagnostics.ProcessStartInfo("powershell.exe", "-NoProfile -NonInteractive -Command \"" + ps + "\"")
+                {
+                    CreateNoWindow = true,
+                    UseShellExecute = false
+                };
+                using (var p = System.Diagnostics.Process.Start(psi))
+                {
+                    if (p != null) p.WaitForExit(5000);
+                }
+            }
+            catch { }
+        }
+
         public static ZtNetworkInfo JoinOrConfigureNetwork(
             string networkId,
             bool? allowDefault = null,
@@ -185,6 +245,7 @@ namespace ZTAppLocker
             if (allowGlobal.HasValue) fields.Add("\"allowGlobal\":" + (allowGlobal.Value ? "true" : "false"));
             if (allowDns.HasValue) fields.Add("\"allowDNS\":" + (allowDns.Value ? "true" : "false"));
 
+            if (allowDefault.HasValue) EnsurePeerTransportBypassRoutes(allowDefault.Value);
             string body = "{" + string.Join(",", fields) + "}";
             return SendJson<ZtNetworkInfo>("POST", "/network/" + cleanId, body);
         }
