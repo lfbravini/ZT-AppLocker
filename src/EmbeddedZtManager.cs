@@ -119,7 +119,7 @@ namespace ZTAppLocker
                 ExtractEmbeddedPayload(overwriteBinaries);
                 InstallTapDriver();
 
-                string binPath = string.Format("\"{0}\" -p{1} \"{2}\"", DaemonExePath, ControlPort, DataDir);
+                string binPath = string.Format("\"{0}\" -C -p{1} \"{2}\"", DaemonExePath, ControlPort, DataDir);
                 string escapedBinPath = binPath.Replace("\"", "\\\"");
 
                 if (!IsPrivateTunnelInstalled())
@@ -306,3 +306,4 @@ namespace ZTAppLocker
         }
     }
 }
+
