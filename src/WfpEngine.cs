@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -56,13 +55,13 @@ namespace ZTAppLocker
         private const uint FWP_CONDITION_FLAG_IS_LOOPBACK = 0x00000001;
         private const uint FWP_E_ALREADY_EXISTS = 0x80320009;
 
-        #region Native Structs (x64 Aligned)
+        #region Pure Blittable x64 Native Structs (Zero CLR Mixed-Layout Marshaling)
 
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        [StructLayout(LayoutKind.Sequential)]
         private struct FWPM_DISPLAY_DATA0
         {
-            public string name;
-            public string description;
+            public IntPtr name;
+            public IntPtr description;
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -72,17 +71,17 @@ namespace ZTAppLocker
             public IntPtr data;
         }
 
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        [StructLayout(LayoutKind.Sequential)]
         private struct FWPM_PROVIDER0
         {
             public Guid providerKey;
             public FWPM_DISPLAY_DATA0 displayData;
             public uint flags;
             public FWP_BYTE_BLOB providerData;
-            public string serviceName;
+            public IntPtr serviceName;
         }
 
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        [StructLayout(LayoutKind.Sequential)]
         private struct FWPM_SUBLAYER0
         {
             public Guid subLayerKey;
@@ -93,15 +92,12 @@ namespace ZTAppLocker
             public ushort weight;
         }
 
-        [StructLayout(LayoutKind.Explicit)]
+        [StructLayout(LayoutKind.Sequential)]
         private struct FWP_VALUE0
         {
-            [FieldOffset(0)] public uint type;
-            [FieldOffset(8)] public byte uint8;
-            [FieldOffset(8)] public ushort uint16;
-            [FieldOffset(8)] public uint uint32;
-            [FieldOffset(8)] public IntPtr uint64Ptr;
-            [FieldOffset(8)] public IntPtr byteBlobPtr;
+            public uint type;
+            private uint _pad;
+            public ulong value;
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -119,7 +115,7 @@ namespace ZTAppLocker
             public Guid filterType;
         }
 
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        [StructLayout(LayoutKind.Sequential)]
         private struct FWPM_FILTER0
         {
             public Guid filterKey;
@@ -133,8 +129,7 @@ namespace ZTAppLocker
             public uint numFilterConditions;
             public IntPtr filterCondition;
             public FWPM_ACTION0 action;
-            public ulong rawContext;
-            public ulong providerContextPad; // 16-byte union with GUID providerContextKey in fwpmtypes.h
+            public Guid providerContextKey; // 16-byte union with UINT64 rawContext in fwpmtypes.h
             public IntPtr reserved;
             public ulong filterId;
             public FWP_VALUE0 effectiveWeight;
@@ -179,16 +174,16 @@ namespace ZTAppLocker
         private static extern uint FwpmTransactionAbort0(IntPtr engineHandle);
 
         [DllImport("fwpuclnt.dll")]
-        private static extern uint FwpmProviderAdd0(IntPtr engineHandle, ref FWPM_PROVIDER0 provider, IntPtr sd);
+        private static extern uint FwpmProviderAdd0(IntPtr engineHandle, IntPtr provider, IntPtr sd);
 
         [DllImport("fwpuclnt.dll")]
-        private static extern uint FwpmSubLayerAdd0(IntPtr engineHandle, ref FWPM_SUBLAYER0 subLayer, IntPtr sd);
+        private static extern uint FwpmSubLayerAdd0(IntPtr engineHandle, IntPtr subLayer, IntPtr sd);
 
         [DllImport("fwpuclnt.dll")]
         private static extern uint FwpmSubLayerDeleteByKey0(IntPtr engineHandle, ref Guid key);
 
         [DllImport("fwpuclnt.dll")]
-        private static extern uint FwpmFilterAdd0(IntPtr engineHandle, ref FWPM_FILTER0 filter, IntPtr sd, out ulong id);
+        private static extern uint FwpmFilterAdd0(IntPtr engineHandle, IntPtr filter, IntPtr sd, out ulong id);
 
         [DllImport("fwpuclnt.dll")]
         private static extern uint FwpmFilterDeleteByKey0(IntPtr engineHandle, ref Guid key);
@@ -257,6 +252,14 @@ namespace ZTAppLocker
         public static void EnsureProviderAndSublayer(IntPtr engine)
         {
             IntPtr pProviderKey = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(Guid)));
+            IntPtr pProvName = Marshal.StringToHGlobalUni("ZT-AppLocker Kernel Provider");
+            IntPtr pProvDesc = Marshal.StringToHGlobalUni("Native WFP ZeroTier Kill-Switch & Leak Prevention Provider");
+            IntPtr pProvStruct = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(FWPM_PROVIDER0)));
+
+            IntPtr pSubName = Marshal.StringToHGlobalUni("ZT-AppLocker Enforcement Sublayer");
+            IntPtr pSubDesc = Marshal.StringToHGlobalUni("Per-application interface binding, boot-time guard, and DNS leak locks");
+            IntPtr pSubStruct = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(FWPM_SUBLAYER0)));
+
             try
             {
                 Marshal.StructureToPtr(ProviderGuid, pProviderKey, false);
@@ -264,35 +267,35 @@ namespace ZTAppLocker
                 FWPM_PROVIDER0 provider = new FWPM_PROVIDER0
                 {
                     providerKey = ProviderGuid,
-                    displayData = new FWPM_DISPLAY_DATA0
-                    {
-                        name = "ZT-AppLocker Kernel Provider",
-                        description = "Native WFP ZeroTier Kill-Switch & Leak Prevention Provider"
-                    },
+                    displayData = new FWPM_DISPLAY_DATA0 { name = pProvName, description = pProvDesc },
                     flags = FWPM_PROVIDER_FLAG_PERSISTENT
                 };
-                uint err = FwpmProviderAdd0(engine, ref provider, IntPtr.Zero);
+                Marshal.StructureToPtr(provider, pProvStruct, false);
+                uint err = FwpmProviderAdd0(engine, pProvStruct, IntPtr.Zero);
                 if (err != 0 && err != FWP_E_ALREADY_EXISTS)
                     throw new InvalidOperationException("FwpmProviderAdd0 failed: 0x" + err.ToString("X8"));
 
                 FWPM_SUBLAYER0 sublayer = new FWPM_SUBLAYER0
                 {
                     subLayerKey = SublayerGuid,
-                    displayData = new FWPM_DISPLAY_DATA0
-                    {
-                        name = "ZT-AppLocker Enforcement Sublayer",
-                        description = "Per-application interface binding, boot-time guard, and DNS leak locks"
-                    },
+                    displayData = new FWPM_DISPLAY_DATA0 { name = pSubName, description = pSubDesc },
                     flags = FWPM_SUBLAYER_FLAG_PERSISTENT,
                     providerKey = pProviderKey,
                     weight = 0x7FFF
                 };
-                err = FwpmSubLayerAdd0(engine, ref sublayer, IntPtr.Zero);
+                Marshal.StructureToPtr(sublayer, pSubStruct, false);
+                err = FwpmSubLayerAdd0(engine, pSubStruct, IntPtr.Zero);
                 if (err != 0 && err != FWP_E_ALREADY_EXISTS)
                     throw new InvalidOperationException("FwpmSubLayerAdd0 failed: 0x" + err.ToString("X8"));
             }
             finally
             {
+                Marshal.FreeHGlobal(pSubStruct);
+                Marshal.FreeHGlobal(pSubDesc);
+                Marshal.FreeHGlobal(pSubName);
+                Marshal.FreeHGlobal(pProvStruct);
+                Marshal.FreeHGlobal(pProvDesc);
+                Marshal.FreeHGlobal(pProvName);
                 Marshal.FreeHGlobal(pProviderKey);
             }
         }
@@ -437,19 +440,19 @@ namespace ZTAppLocker
                 {
                     fieldKey = FWPM_CONDITION_IP_PROTOCOL,
                     matchType = FWP_MATCH_EQUAL,
-                    conditionValue = new FWP_VALUE0 { type = FWP_UINT8, uint8 = ipProtocol }
+                    conditionValue = new FWP_VALUE0 { type = FWP_UINT8, value = ipProtocol }
                 },
                 new FWPM_FILTER_CONDITION0
                 {
                     fieldKey = FWPM_CONDITION_IP_REMOTE_PORT,
                     matchType = FWP_MATCH_EQUAL,
-                    conditionValue = new FWP_VALUE0 { type = FWP_UINT16, uint16 = 53 }
+                    conditionValue = new FWP_VALUE0 { type = FWP_UINT16, value = 53 }
                 },
                 new FWPM_FILTER_CONDITION0
                 {
                     fieldKey = FWPM_CONDITION_IP_LOCAL_INTERFACE,
                     matchType = FWP_MATCH_NOT_EQUAL,
-                    conditionValue = new FWP_VALUE0 { type = FWP_UINT64, uint64Ptr = ztLuidPtr }
+                    conditionValue = new FWP_VALUE0 { type = FWP_UINT64, value = unchecked((ulong)ztLuidPtr.ToInt64()) }
                 }
             };
 
@@ -495,7 +498,7 @@ namespace ZTAppLocker
                         {
                             fieldKey = FWPM_CONDITION_FLAGS,
                             matchType = FWP_MATCH_FLAGS_ALL_SET,
-                            conditionValue = new FWP_VALUE0 { type = FWP_UINT32, uint32 = FWP_CONDITION_FLAG_IS_LOOPBACK }
+                            conditionValue = new FWP_VALUE0 { type = FWP_UINT32, value = FWP_CONDITION_FLAG_IS_LOOPBACK }
                         }
                     });
 
@@ -514,7 +517,7 @@ namespace ZTAppLocker
                         {
                             fieldKey = FWPM_CONDITION_IP_LOCAL_INTERFACE,
                             matchType = FWP_MATCH_EQUAL,
-                            conditionValue = new FWP_VALUE0 { type = FWP_UINT64, uint64Ptr = luidPtr }
+                            conditionValue = new FWP_VALUE0 { type = FWP_UINT64, value = unchecked((ulong)luidPtr.ToInt64()) }
                         }
                     });
 
@@ -543,7 +546,7 @@ namespace ZTAppLocker
                 conditionValue = new FWP_VALUE0
                 {
                     type = FWP_BYTE_BLOB_TYPE,
-                    byteBlobPtr = appIdBlobPtr
+                    value = unchecked((ulong)appIdBlobPtr.ToInt64())
                 }
             };
         }
@@ -562,6 +565,9 @@ namespace ZTAppLocker
             int condSize = Marshal.SizeOf(typeof(FWPM_FILTER_CONDITION0));
             IntPtr condArrayPtr = Marshal.AllocHGlobal(condSize * conditions.Length);
             IntPtr providerKeyPtr = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(Guid)));
+            IntPtr namePtr = Marshal.StringToHGlobalUni(name);
+            IntPtr descPtr = Marshal.StringToHGlobalUni(description);
+            IntPtr filterPtr = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(FWPM_FILTER0)));
 
             try
             {
@@ -575,24 +581,29 @@ namespace ZTAppLocker
                 FWPM_FILTER0 filter = new FWPM_FILTER0
                 {
                     filterKey = filterKey,
-                    displayData = new FWPM_DISPLAY_DATA0 { name = name, description = description },
+                    displayData = new FWPM_DISPLAY_DATA0 { name = namePtr, description = descPtr },
                     flags = flags,
                     providerKey = providerKeyPtr,
                     layerKey = layerKey,
                     subLayerKey = SublayerGuid,
-                    weight = new FWP_VALUE0 { type = FWP_UINT8, uint8 = weightValue },
+                    weight = new FWP_VALUE0 { type = FWP_UINT8, value = weightValue },
                     numFilterConditions = (uint)conditions.Length,
                     filterCondition = condArrayPtr,
                     action = new FWPM_ACTION0 { type = actionType }
                 };
 
+                Marshal.StructureToPtr(filter, filterPtr, false);
+
                 ulong filterId;
-                uint err = FwpmFilterAdd0(engine, ref filter, IntPtr.Zero, out filterId);
+                uint err = FwpmFilterAdd0(engine, filterPtr, IntPtr.Zero, out filterId);
                 if (err != 0)
                     throw new InvalidOperationException(string.Format("FwpmFilterAdd0 ({0}) failed: 0x{1:X8}", name, err));
             }
             finally
             {
+                Marshal.FreeHGlobal(filterPtr);
+                Marshal.FreeHGlobal(descPtr);
+                Marshal.FreeHGlobal(namePtr);
                 Marshal.FreeHGlobal(condArrayPtr);
                 Marshal.FreeHGlobal(providerKeyPtr);
             }
@@ -710,5 +721,3 @@ namespace ZTAppLocker
         }
     }
 }
-
-
