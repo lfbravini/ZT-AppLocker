@@ -118,7 +118,7 @@ namespace ZTAppLocker
                 bool ok = ZeroTierApi.EnsureDaemonServiceRunning(out msg);
                 MessageBox.Show(msg, "ZeroTier Core Service", MessageBoxButtons.OK, ok ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
                 // Auto-provision embedded ZeroTier Core + TAP driver on first launch
-            ThreadPool.QueueUserWorkItem(_ =>
+            ThreadPool.QueueUserWorkItem(state =>
             {
                 string initMsg;
                 if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))
@@ -136,7 +136,7 @@ namespace ZTAppLocker
                 bool ok = ServiceManager.InstallAndStart(out msg);
                 MessageBox.Show(msg, "Guard Service Installer", MessageBoxButtons.OK, ok ? MessageBoxIcon.Information : MessageBoxIcon.Information);
                 // Auto-provision embedded ZeroTier Core + TAP driver on first launch
-            ThreadPool.QueueUserWorkItem(_ =>
+            ThreadPool.QueueUserWorkItem(state =>
             {
                 string initMsg;
                 if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))
@@ -157,7 +157,7 @@ namespace ZTAppLocker
                 ServiceManager.UninstallAndClean(res == DialogResult.Yes, out msg);
                 MessageBox.Show(msg, "Uninstall Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 // Auto-provision embedded ZeroTier Core + TAP driver on first launch
-            ThreadPool.QueueUserWorkItem(_ =>
+            ThreadPool.QueueUserWorkItem(state =>
             {
                 string initMsg;
                 if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))
@@ -360,7 +360,7 @@ namespace ZTAppLocker
             };
 
             // Auto-provision embedded ZeroTier Core + TAP driver on first launch
-            ThreadPool.QueueUserWorkItem(_ =>
+            ThreadPool.QueueUserWorkItem(state =>
             {
                 string initMsg;
                 if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))
@@ -387,7 +387,7 @@ namespace ZTAppLocker
                 txtNetworkId.Clear();
                 lblStatus.Text = "Joined ZeroTier network " + nwid + ". Authorizing / assigning IP...";
                 // Auto-provision embedded ZeroTier Core + TAP driver on first launch
-            ThreadPool.QueueUserWorkItem(_ =>
+            ThreadPool.QueueUserWorkItem(state =>
             {
                 string initMsg;
                 if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))
@@ -417,7 +417,7 @@ namespace ZTAppLocker
                 {
                     lblStatus.Text = "Left ZeroTier network " + net.Id;
                     // Auto-provision embedded ZeroTier Core + TAP driver on first launch
-            ThreadPool.QueueUserWorkItem(_ =>
+            ThreadPool.QueueUserWorkItem(state =>
             {
                 string initMsg;
                 if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))
@@ -461,7 +461,7 @@ namespace ZTAppLocker
                 lblStatus.Text = string.Format("Updated [{0}]: allowDefault={1}, allowDNS={2}",
                     net.Id, chkAllowDefault.Checked, chkAllowDns.Checked);
                 // Auto-provision embedded ZeroTier Core + TAP driver on first launch
-            ThreadPool.QueueUserWorkItem(_ =>
+            ThreadPool.QueueUserWorkItem(state =>
             {
                 string initMsg;
                 if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))
@@ -564,7 +564,7 @@ namespace ZTAppLocker
 
             lstQueue.Items.Clear();
             // Auto-provision embedded ZeroTier Core + TAP driver on first launch
-            ThreadPool.QueueUserWorkItem(_ =>
+            ThreadPool.QueueUserWorkItem(state =>
             {
                 string initMsg;
                 if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))
@@ -587,7 +587,7 @@ namespace ZTAppLocker
             WfpEngine.RemoveAppLock(item.Policy.ExePath);
             PolicyStore.RemoveAppLock(item.Policy.ExePath);
             // Auto-provision embedded ZeroTier Core + TAP driver on first launch
-            ThreadPool.QueueUserWorkItem(_ =>
+            ThreadPool.QueueUserWorkItem(state =>
             {
                 string initMsg;
                 if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))
@@ -609,7 +609,7 @@ namespace ZTAppLocker
                 WfpEngine.PurgeAllWfpFilters();
                 PolicyStore.ClearAllApps();
                 // Auto-provision embedded ZeroTier Core + TAP driver on first launch
-            ThreadPool.QueueUserWorkItem(_ =>
+            ThreadPool.QueueUserWorkItem(state =>
             {
                 string initMsg;
                 if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))
@@ -638,7 +638,7 @@ namespace ZTAppLocker
             }
 
             // Auto-provision embedded ZeroTier Core + TAP driver on first launch
-            ThreadPool.QueueUserWorkItem(_ =>
+            ThreadPool.QueueUserWorkItem(state =>
             {
                 string initMsg;
                 if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))
@@ -988,7 +988,7 @@ namespace ZTAppLocker
                             PolicyStore.Save(imported);
                             GuardService.ReconcilePolicyWithWfp(false);
                             // Auto-provision embedded ZeroTier Core + TAP driver on first launch
-            ThreadPool.QueueUserWorkItem(_ =>
+            ThreadPool.QueueUserWorkItem(state =>
             {
                 string initMsg;
                 if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))
@@ -1012,7 +1012,7 @@ namespace ZTAppLocker
             WindowState = FormWindowState.Normal;
             Activate();
             // Auto-provision embedded ZeroTier Core + TAP driver on first launch
-            ThreadPool.QueueUserWorkItem(_ =>
+            ThreadPool.QueueUserWorkItem(state =>
             {
                 string initMsg;
                 if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))
@@ -1053,7 +1053,7 @@ namespace ZTAppLocker
             {
                 btnUpdZt.Enabled = false;
                 btnUpdZt.Text = "Downloading & Updating ZT Core...";
-                ThreadPool.QueueUserWorkItem(_ =>
+                ThreadPool.QueueUserWorkItem(state =>
                 {
                     try
                     {
@@ -1064,7 +1064,7 @@ namespace ZTAppLocker
                             btnUpdZt.Text = "Update Embedded ZT Core (Online)";
                             MessageBox.Show(res, "ZT Core Updated", MessageBoxButtons.OK, MessageBoxIcon.Information);
                             // Auto-provision embedded ZeroTier Core + TAP driver on first launch
-            ThreadPool.QueueUserWorkItem(_ =>
+            ThreadPool.QueueUserWorkItem(state =>
             {
                 string initMsg;
                 if (ZeroTierApi.EnsureDaemonServiceRunning(out initMsg))
@@ -1097,6 +1097,7 @@ namespace ZTAppLocker
         }
     }
 }
+
 
 
 
