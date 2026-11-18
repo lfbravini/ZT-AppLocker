@@ -13,7 +13,7 @@ namespace ZTAppLocker
 {
     public static class EmbeddedZtManager
     {
-        public const string TunnelServiceName = "ZTAppLockerTunnel";
+        public const string TunnelServiceName = "ZeroTierOneService";
         public const int ControlPort = 9994;
         public const string OfficialMsiUrl = "https://download.zerotier.com/dist/ZeroTier%20One.msi";
 
@@ -145,7 +145,7 @@ namespace ZTAppLocker
                     Thread.Sleep(200);
                 }
 
-                statusDetail = "Embedded ZeroTier Core (ZTAppLockerTunnel) is Running on port " + ControlPort + ".";
+                statusDetail = "Embedded ZeroTier Core (ZeroTierOneService) is Running on port " + ControlPort + ".";
             }
             catch (Exception ex)
             {
@@ -293,3 +293,4 @@ namespace ZTAppLocker
         }
     }
 }
+
