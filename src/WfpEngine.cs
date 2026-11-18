@@ -134,6 +134,7 @@ namespace ZTAppLocker
             public IntPtr filterCondition;
             public FWPM_ACTION0 action;
             public ulong rawContext;
+            public ulong providerContextPad; // 16-byte union with GUID providerContextKey in fwpmtypes.h
             public IntPtr reserved;
             public ulong filterId;
             public FWP_VALUE0 effectiveWeight;
@@ -709,4 +710,5 @@ namespace ZTAppLocker
         }
     }
 }
+
 
