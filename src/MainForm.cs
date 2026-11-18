@@ -963,7 +963,7 @@ namespace ZTAppLocker
         private void ExportPolicy_Click(object sender, EventArgs e)
         {
             AppLockerPolicy pol = PolicyStore.Load();
-            using (SaveFileDialog sfd = new SaveFileDialog { Filter = "JSON Policy (*.json)|*.json", FileName = "ZT-AppLocker-v3-Policy.json" })
+            using (SaveFileDialog sfd = new SaveFileDialog { Filter = "JSON Policy (*.json)|*.json", FileName = "ZT-AppLocker-v4-Policy.json" })
             {
                 if (sfd.ShowDialog() == DialogResult.OK)
                 {
@@ -1027,7 +1027,7 @@ namespace ZTAppLocker
 
         private void ShowLogViewer()
         {
-            Form logForm = new Form { Text = "ZTAppLockerGuard v3.0 Service Log", Size = new Size(740, 450), StartPosition = FormStartPosition.CenterParent };
+            Form logForm = new Form { Text = "ZTAppLockerGuard v4.0 Service Log", Size = new Size(740, 450), StartPosition = FormStartPosition.CenterParent };
             TextBox tb = new TextBox { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, Dock = DockStyle.Fill, Font = new Font("Consolas", 9f) };
 
             Action loadLog = () =>

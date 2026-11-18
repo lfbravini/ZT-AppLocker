@@ -23,7 +23,7 @@ namespace ZTAppLocker
 
         protected override void OnStart(string[] args)
         {
-            WriteServiceLog("ZTAppLockerGuard v3.0 started.");
+            WriteServiceLog("ZTAppLockerGuard v4.0 started.");
 
             string ztMsg;
             ZeroTierApi.EnsureDaemonServiceRunning(out ztMsg);
@@ -108,16 +108,16 @@ namespace ZTAppLocker
         {
             SplitTunnelEngine.Stop();
             try { if (_reconcileTimer != null) _reconcileTimer.Dispose(); } catch { }
-            WriteServiceLog("ZTAppLockerGuard v3.0 stopped.");
+            WriteServiceLog("ZTAppLockerGuard v4.0 stopped.");
         }
 
         public static void WriteServiceLog(string message)
         {
             try
             {
-                string dir = @"C:\Program Files\ZT-AppLocker";
+                string dir = ServiceManager.InstallDir;
                 if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
-                string logPath = Path.Combine(dir, "ZTAppLockerGuard.log");
+                string logPath = ServiceManager.LogFilePath;
 
                 FileInfo fi = new FileInfo(logPath);
                 if (fi.Exists && fi.Length > 1048576)

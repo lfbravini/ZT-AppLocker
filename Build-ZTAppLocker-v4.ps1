@@ -1,6 +1,7 @@
 #Requires -Version 5.1
 param(
-    [switch]$UpdateZtCore
+    [switch]$UpdateZtCore,
+    [switch]$CopyToDesktop
 )
 
 $ErrorActionPreference = "Stop"
@@ -174,9 +175,12 @@ if ($LASTEXITCODE -ne 0) {
     throw "C# compilation failed with exit code $LASTEXITCODE"
 }
 
-$DesktopDir = [Environment]::GetFolderPath('Desktop')
-if (-not [string]::IsNullOrWhiteSpace($DesktopDir) -and (Test-Path $DesktopDir)) {
-    Copy-Item -Path $DistExePath -Destination $DesktopExe -Force
+if ($CopyToDesktop) {
+    $DesktopDir = [Environment]::GetFolderPath('Desktop')
+    if (-not [string]::IsNullOrWhiteSpace($DesktopDir) -and (Test-Path $DesktopDir)) {
+        Copy-Item -Path $DistExePath -Destination $DesktopExe -Force
+        Write-Host "      Copied build output to Desktop: $DesktopExe" -ForegroundColor Green
+    }
 }
 
 $SizeMb = [math]::Round((Get-Item $DistExePath).Length / 1MB, 2)

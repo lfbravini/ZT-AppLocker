@@ -8,8 +8,8 @@ using System.Windows.Forms;
 
 [assembly: AssemblyTitle("ZT-AppLocker")]
 [assembly: AssemblyDescription("ZeroTier Network Control Plane, Native WFP Kernel Kill-Switch & Live Socket Auditor")]
-[assembly: AssemblyVersion("3.0.0.0")]
-[assembly: AssemblyFileVersion("3.0.0.0")]
+[assembly: AssemblyVersion("4.0.0.0")]
+[assembly: AssemblyFileVersion("4.0.0.0")]
 
 namespace ZTAppLocker
 {
