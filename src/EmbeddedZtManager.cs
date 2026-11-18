@@ -53,27 +53,17 @@ namespace ZTAppLocker
             }
         }
 
-        public static string GetPrivateTunnelStatus()
-        {
-            try
-            {
-                using (ServiceController sc = new ServiceController(TunnelServiceName))
-                {
-                    return sc.Status.ToString();
-                }
-            }
-            catch
-            {
-                return "NotInstalled";
-            }
-        }
-
         public static void ExtractEmbeddedPayload(bool overwriteExisting)
         {
             if (!Directory.Exists(CoreDir))
                 Directory.CreateDirectory(CoreDir);
             if (!Directory.Exists(DataDir))
                 Directory.CreateDirectory(DataDir);
+
+            // Pre-configure custom control port 9994 so ZT never collides with port 9993
+            string portFile = Path.Combine(DataDir, "zerotier-one.port");
+            if (!File.Exists(portFile))
+                File.WriteAllText(portFile, ControlPort.ToString());
 
             Assembly asm = Assembly.GetExecutingAssembly();
             string[] resNames = asm.GetManifestResourceNames();
@@ -105,36 +95,34 @@ namespace ZTAppLocker
             if (!File.Exists(TapInfPath))
                 throw new FileNotFoundException("TAP driver INF not found.", TapInfPath);
 
-            // pnputil.exe is built into Windows System32 on all Win10/11 x64 systems
-            RunProcess("pnputil.exe", string.Format("/add-driver \"{0}\" /install", TapInfPath), 30000);
+            RunProcess("pnputil.exe", string.Format("/add-driver \"{0}\" /install", TapInfPath), 20000);
         }
 
         public static void ProvisionAndStartPrivateTunnel(bool overwriteBinaries, out string statusDetail)
         {
             try
             {
-                // Suppress any external ZeroTier tray UI if present on the machine
                 SuppressExternalZeroTierUi();
-
                 ExtractEmbeddedPayload(overwriteBinaries);
                 InstallTapDriver();
 
-                string binPath = string.Format("\"{0}\" -C -p{1} \"{2}\"", DaemonExePath, ControlPort, DataDir);
+                // Official ZeroTier Windows SCM format: "<exe>" -C "<DataDir>"
+                string binPath = string.Format("\"{0}\" -C \"{1}\"", DaemonExePath, DataDir);
                 string escapedBinPath = binPath.Replace("\"", "\\\"");
 
                 if (!IsPrivateTunnelInstalled())
                 {
                     RunProcess("sc.exe", string.Format("create {0} binPath= \"{1}\" start= auto DisplayName= \"ZT-AppLocker Embedded ZeroTier Core\"",
-                        TunnelServiceName, escapedBinPath), 15000);
+                        TunnelServiceName, escapedBinPath), 10000);
                     RunProcess("sc.exe", string.Format("description {0} \"Self-contained headless ZeroTier One transport engine managed exclusively by ZT-AppLocker.\"",
-                        TunnelServiceName), 10000);
+                        TunnelServiceName), 8000);
                     RunProcess("sc.exe", string.Format("failure {0} reset= 86400 actions= restart/3000/restart/3000/restart/3000",
-                        TunnelServiceName), 10000);
+                        TunnelServiceName), 8000);
                 }
                 else
                 {
                     RunProcess("sc.exe", string.Format("config {0} binPath= \"{1}\" start= auto",
-                        TunnelServiceName, escapedBinPath), 15000);
+                        TunnelServiceName, escapedBinPath), 10000);
                 }
 
                 using (ServiceController sc = new ServiceController(TunnelServiceName))
@@ -142,11 +130,10 @@ namespace ZTAppLocker
                     if (sc.Status != ServiceControllerStatus.Running)
                     {
                         sc.Start();
-                        sc.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(15));
+                        sc.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(12));
                     }
                 }
 
-                // Wait briefly for authtoken.secret generation and lock down ACLs to SYSTEM + Admins
                 for (int i = 0; i < 20; i++)
                 {
                     string tokenPath = Path.Combine(DataDir, "authtoken.secret");
@@ -155,7 +142,7 @@ namespace ZTAppLocker
                         HardenDataDirectoryAcl();
                         break;
                     }
-                    Thread.Sleep(250);
+                    Thread.Sleep(200);
                 }
 
                 statusDetail = "Embedded ZeroTier Core (ZTAppLockerTunnel) is Running on port " + ControlPort + ".";
@@ -176,17 +163,17 @@ namespace ZTAppLocker
                     if (sc.Status != ServiceControllerStatus.Stopped && sc.Status != ServiceControllerStatus.StopPending)
                     {
                         sc.Stop();
-                        sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(15));
+                        sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(12));
                     }
                 }
             }
             catch { }
 
-            RunProcess("sc.exe", "delete " + TunnelServiceName, 10000);
+            RunProcess("sc.exe", "delete " + TunnelServiceName, 8000);
 
             if (removeTapDriver && File.Exists(TapInfPath))
             {
-                try { RunProcess("pnputil.exe", string.Format("/delete-driver \"{0}\" /uninstall /force", TapInfPath), 20000); }
+                try { RunProcess("pnputil.exe", string.Format("/delete-driver \"{0}\" /uninstall /force", TapInfPath), 15000); }
                 catch { }
             }
         }
@@ -241,7 +228,6 @@ namespace ZTAppLocker
                     wc.DownloadFile(OfficialMsiUrl, msiPath);
                 }
 
-                // Administrative MSI unpack (silent, no installation onto host OS)
                 RunProcess("msiexec.exe", string.Format("/a \"{0}\" /qn TARGETDIR=\"{1}\"", msiPath, extractDir), 60000);
 
                 string newExe = Directory.GetFiles(extractDir, "zerotier-one_x64.exe", SearchOption.AllDirectories).FirstOrDefault();
@@ -254,7 +240,6 @@ namespace ZTAppLocker
 
                 string newVer = FileVersionInfo.GetVersionInfo(newExe).FileVersion ?? "Updated";
 
-                // Stop private tunnel service cleanly while preserving zt-data identity & networks
                 try
                 {
                     using (ServiceController sc = new ServiceController(TunnelServiceName))
@@ -262,7 +247,7 @@ namespace ZTAppLocker
                         if (sc.Status != ServiceControllerStatus.Stopped)
                         {
                             sc.Stop();
-                            sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(15));
+                            sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(12));
                         }
                     }
                 }
@@ -279,7 +264,7 @@ namespace ZTAppLocker
                 using (ServiceController sc = new ServiceController(TunnelServiceName))
                 {
                     sc.Start();
-                    sc.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(15));
+                    sc.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(12));
                 }
 
                 return "Embedded ZeroTier Core updated to v" + newVer + " and restarted cleanly (Node ID & networks preserved).";
@@ -292,18 +277,19 @@ namespace ZTAppLocker
 
         private static void RunProcess(string fileName, string args, int timeoutMs)
         {
+            // Do NOT redirect stdout/stderr without async readers, or child output buffers can deadlock WaitForExit
             ProcessStartInfo psi = new ProcessStartInfo(fileName, args)
             {
                 CreateNoWindow = true,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
+                UseShellExecute = false
             };
             using (Process p = Process.Start(psi))
             {
-                p.WaitForExit(timeoutMs);
+                if (!p.WaitForExit(timeoutMs))
+                {
+                    try { p.Kill(); } catch { }
+                }
             }
         }
     }
 }
-
