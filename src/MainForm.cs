@@ -179,7 +179,7 @@ namespace ZTAppLocker
             pnlHardening = new Panel { Location = new Point(16, 198), Size = new Size(712, 42), BorderStyle = BorderStyle.FixedSingle, BackColor = Color.FromArgb(255, 250, 235) };
             chkBootTimeGuard = new CheckBox
             {
-                Text = "Boot-Time WFP Leak Guard (blocks apps before Windows boots)",
+                Text = "Boot-Time WFP Guard (blocks at boot)",
                 Location = new Point(10, 10),
                 Size = new Size(375, 22),
                 Checked = true,
@@ -187,7 +187,7 @@ namespace ZTAppLocker
             };
             chkStrictDnsLock = new CheckBox
             {
-                Text = "Strict ZeroTier DNS Lock (blocks Port 53 outside ZT)",
+                Text = "Strict ZT DNS Lock (blocks Port 53 leaks)",
                 Location = new Point(392, 10),
                 Size = new Size(312, 22),
                 Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
@@ -224,7 +224,7 @@ namespace ZTAppLocker
 
             Button btnApply = new Button
             {
-                Text = "Apply Native WFP Kernel Kill-Switch & Sever Non-ZT Sockets",
+                Text = "Apply Native WFP Kernel Kill-Switch and Sever Non-ZT Sockets",
                 Location = new Point(16, 416),
                 Size = new Size(712, 38),
                 BackColor = Color.FromArgb(0, 120, 215),
@@ -914,3 +914,4 @@ namespace ZTAppLocker
         }
     }
 }
+
