@@ -24,7 +24,7 @@ namespace ZTAppLocker
 
         public static string DataDir
         {
-            get { return Path.Combine(PolicyStore.DataDir, "zt-data"); }
+            get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), @"ZeroTier\One"); }
         }
 
         public static string DaemonExePath
@@ -104,7 +104,7 @@ namespace ZTAppLocker
                 InstallTapDriver();
 
                 // Official ZeroTier Windows SCM format: "<exe>" -C "<DataDir>"
-                string binPath = string.Format("\"{0}\" \"{1}\"", DaemonExePath, DataDir);
+                string binPath = string.Format("\"{0}\"", DaemonExePath);
                 string escapedBinPath = binPath.Replace("\"", "\\\"");
 
                 if (!IsPrivateTunnelInstalled())
@@ -321,6 +321,7 @@ namespace ZTAppLocker
         }
     }
 }
+
 
 
 
