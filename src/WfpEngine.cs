@@ -306,11 +306,74 @@ namespace ZTAppLocker
             }
         }
 
+        public static void EnsureZeroTierFallbackRoute(string zeroTierAdapterGuid)
+        {
+            try
+            {
+                Guid targetGuid = new Guid(zeroTierAdapterGuid);
+                int ifIndex = -1;
+                foreach (NetworkInterface nic in NetworkInterface.GetAllNetworkInterfaces())
+                {
+                    Guid g;
+                    if (Guid.TryParse(nic.Id, out g) && g == targetGuid)
+                    {
+                        var props = nic.GetIPProperties().GetIPv4Properties();
+                        if (props != null) ifIndex = props.Index;
+                        break;
+                    }
+                }
+                if (ifIndex <= 0) return;
+
+                string secretPath = @"C:\ProgramData\ZeroTier\One\authtoken.secret";
+                if (!File.Exists(secretPath)) return;
+                string token = File.ReadAllText(secretPath).Trim();
+
+                var req = (HttpWebRequest)WebRequest.Create("http://127.0.0.1:9993/network");
+                req.Headers["X-ZT1-Auth"] = token;
+                req.Timeout = 2000;
+                string json;
+                using (var resp = (HttpWebResponse)req.GetResponse())
+                using (var sr = new StreamReader(resp.GetResponseStream()))
+                {
+                    json = sr.ReadToEnd();
+                }
+
+                // Extract managed 0.0.0.0/0 gateway ("target":"0.0.0.0/0","via":"<ip>")
+                var m = System.Text.RegularExpressions.Regex.Match(
+                    json,
+                    "\"target\"\\s*:\\s*\"0\\.0\\.0\\.0/0\"\\s*,\\s*\"via\"\\s*:\\s*\"([0-9\\.]+)\""
+                );
+                if (!m.Success) return;
+                string gatewayIp = m.Groups[1].Value;
+
+                // Ensure high-metric (500) fallback 0.0.0.0/0 route exists on the live ZeroTier interface
+                string ps = string.Format(
+                    "$r = Get-NetRoute -InterfaceIndex {0} -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue; " +
+                    "if (-not ($r | Where-Object {{ $_.NextHop -eq '{1}' }})) {{ " +
+                    "  Remove-NetRoute -InterfaceIndex {0} -DestinationPrefix '0.0.0.0/0' -Confirm:$false -ErrorAction SilentlyContinue; " +
+                    "  New-NetRoute -InterfaceIndex {0} -DestinationPrefix '0.0.0.0/0' -NextHop '{1}' -RouteMetric 500 -PolicyStore ActiveStore | Out-Null; " +
+                    "}}",
+                    ifIndex, gatewayIp
+                );
+                var psi = new System.Diagnostics.ProcessStartInfo("powershell.exe", "-NoProfile -NonInteractive -Command \"" + ps + "\"")
+                {
+                    CreateNoWindow = true,
+                    UseShellExecute = false
+                };
+                using (var p = System.Diagnostics.Process.Start(psi))
+                {
+                    if (p != null) p.WaitForExit(5000);
+                }
+            }
+            catch { }
+        }
+
         public static void ApplyAppLock(string exePath, string zeroTierAdapterGuid, bool includeBootTimeGuard = true)
         {
             if (string.IsNullOrWhiteSpace(exePath) || !File.Exists(exePath))
                 throw new FileNotFoundException("Target executable not found.", exePath);
 
+            EnsureZeroTierFallbackRoute(zeroTierAdapterGuid);
             ulong ztLuid = ResolveInterfaceLuid(zeroTierAdapterGuid);
             string appHash = ComputeAppHash(exePath);
             string leaf = Path.GetFileName(exePath);
@@ -405,7 +468,8 @@ namespace ZTAppLocker
 
                     if (enabled)
                     {
-                        ulong ztLuid = ResolveInterfaceLuid(zeroTierAdapterGuid);
+                        EnsureZeroTierFallbackRoute(zeroTierAdapterGuid);
+            ulong ztLuid = ResolveInterfaceLuid(zeroTierAdapterGuid);
                         IntPtr luidPtr = Marshal.AllocHGlobal(sizeof(ulong));
                         try
                         {
@@ -809,6 +873,7 @@ namespace ZTAppLocker
         }
     }
 }
+
 
 
 
