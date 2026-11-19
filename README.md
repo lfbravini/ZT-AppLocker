@@ -1,6 +1,6 @@
 # ZT-AppLocker v4.0
 
-Self-contained ZeroTier control-plane client with a native Windows Filtering Platform (WFP) kill-switch and WinDivert per-app split-tunnel relay. Built as a single x64 EXE on .NET Framework 4.x with no NuGet runtime dependencies.
+Self-contained ZeroTier control-plane client with a native Windows Filtering Platform (WFP) kill-switch and WinDivert per-app split-tunnel relay. WPF UI shell on .NET Framework 4.8 (`ZT-AppLocker.csproj`); engines remain P/Invoke C# with embedded ZeroTier/WinDivert payloads.
 
 ## Requirements
 
@@ -74,3 +74,9 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the WFP filter matrix, SplitTunnel ow
 ## CI
 
 [`.github/workflows/build.yml`](.github/workflows/build.yml) builds on push/PR to `main`, on demand, and weekly with `-UpdateZtCore`.
+
+## v5 (in development)
+
+Guard-hosted split DNS engine (AD coexistence, global DNS settings, validate/monitor upstreams). **v4.0 remains stable.**
+
+Design: [docs/v5-guard-split-dns.md](docs/v5-guard-split-dns.md) · branch `v5/guard-split-dns`
